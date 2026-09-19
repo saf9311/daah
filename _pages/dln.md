@@ -3,7 +3,7 @@ title: "Digital Literacy Narrative"
 permalink: /dln.html
 author_profile: false
 ---
-Gemini's Response:
+Geminis Response:
 Digital Literacy Beyond the Surface: An Interactive Media Perspective
 At twenty, my generation has spent a decade being labeled "digital natives," a condescending shorthand that confuses thumb agility with critical consciousness. Knowing how to hotkey a timeline in Premiere, spin up a quick Discord server, or prompt an LLM to debug a rogue array doesn’t mean we understand digital literacy. Sitting in a multidisciplinary seminar—surrounded by a Computer Science major debugging C++ memory leaks, an Environmental Studies major tracking geospatial soil-moisture datasets, and a Creative Writing major interrogating narrative voice—has completely destabilized what I thought my medium was. Interactive Media isn’t just about making things look reactive or shiny; it’s about negotiating power, memory, and code in a networked world.
 Daily Workflows, Content Creation, and Social Architecture
@@ -28,7 +28,7 @@ Critical Self-Assessment and Where Next
 Honestly? My technical confidence outpaces my ethical audit framework. I can wire together a real-time face-tracking particle system or deploy a web-scraping pipeline in an afternoon, but I often rush past metadata lineage or accessibility implications (screen reader semantic trees, color contrast edge cases, low-bandwidth footprint).
 Moving forward, I want to trade superficial interactivity for ecological and somatic computing—exploring how biometric or spatial inputs can map environmental precarity rather than corporate engagement metrics. Digital literacy at twenty isn't mastery; it's realizing every interface is a political choice, and learning how to author resilient alternatives.
 
-ChatGPT's Response:
+ChatGPTs Response:
 Reflection on Digital Literacy
 As a 20-year-old university student majoring in Interactive Media, I have grown up surrounded by digital technology, so I sometimes assume that I am already digitally literate. I use my phone, social media, editing software, online research tools, and different digital platforms every day. However, this course has made me realize that digital literacy is much more than simply knowing how to use technology. It also involves understanding how digital information is created, shared, analyzed, and interpreted, and being able to think critically about the technologies that shape the way we see the world.
 In my daily and academic life, I already use a variety of digital strategies for content creation and communication. For example, I use platforms such as Instagram, TikTok, and other social media to interact with people and share visual content. As an Interactive Media student, I also work with tools such as Adobe Photoshop, Illustrator, Premiere Pro, and other creative software to edit images, videos, and designs. These tools allow me to communicate ideas visually instead of relying only on written text. I have also learned that creating digital content involves making decisions about audience, composition, accessibility, and the way information is presented.
@@ -40,7 +40,7 @@ At the same time, I recognize that I still have areas where I need to improve. I
 AI is especially interesting because it is already changing creative and academic work. I want to explore how AI can support brainstorming, research, design, data analysis, and content creation without replacing critical thinking or creativity. I think an important part of digital literacy today is knowing when to use AI, how to question its results, and how to recognize that AI-generated information can contain errors or biases.
 Overall, this course has helped me understand that digital literacy is not a fixed skill that I either have or do not have. It is something that continues to develop as technology changes. I already have strengths in visual communication, digital content creation, and online interaction, but I want to expand those skills into areas such as data analysis, computational thinking, digital humanities, and AI. Most importantly, I want to become someone who does not simply use technology, but understands how it works, questions its impact, and finds creative ways to use it to understand and communicate ideas.
 
-Claude's Response:
+Claudes Response:
 Reflection on Digital Literacy
 As a 20-year-old Interactive Media major, I used to assume digital literacy was something I had already finished learning. I grew up editing photos on my phone and posting to Instagram and TikTok. This course has shown me that fluency with tools is only the surface. Digital literacy is about understanding how digital information is made, moved, and interpreted, and questioning the systems that shape what I see.
 Content creation and social interaction are where I am strongest. I use Photoshop, Illustrator, and Premiere Pro to build images and video, and Figma to prototype interfaces. Working in these programs has taught me that every choice, from color contrast to caption placement to alt text, affects who can access a piece and how they will read it. Socially, I treat each platform as its own audience: a TikTok, an Instagram carousel, and a Discord post all call for different tones and formats. I also credit other creators and consider how a post might travel beyond its intended audience.
