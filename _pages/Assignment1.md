@@ -1,7 +1,7 @@
 ---
-layout: post
+layout: single
 title: "Assignment 1: A Distant Reading of Science Fiction"
-url: /assignment1/
+permalink: /assignment1/ 
 ---
 Reem Alzarooni, Sarah Farzaneh
 Professor David Wrisley 
