@@ -43,9 +43,13 @@ Overall, this investigation changed how we understand science fiction and the wa
 
 Contributions:--
 Conceptualization: Reem Alzarooni and Sarah Farzaneh 
+
 Methodology and formal analysis: Reem Alzarooni and Sarah Farzaneh
+
 Writing- original draft: Sarah Farzaneh (exploratory analysis) and Reem Alzarooni (critical evaluation and conclusion)
+
 Writing- review and editing: Reem Alzarooni and Sarah Farzaneh 
+
 Visualization: Reem Alzarooni and Sarah Farzaneh 
 
 AI Statement:
