@@ -35,3 +35,5 @@ Further into the assignment, we created the prompt with the assistance of ChatGP
 [Download the dataset (CSV)]({{ '/assets/lorimer.csv' | relative_url }})
 
 ![gemini](../assets/images/gemini.png)
+
+Each two pictures were sent to the AI so that it would be easier for it to understand and analyze it, but with the recent technological advances, LLM’s are probably now able to analyze a high amount of data without it hallucinating or getting something wrong. It was the safer option to send images two by two though, so that it would be guaranteed that the AI will analyze it accurately.  
