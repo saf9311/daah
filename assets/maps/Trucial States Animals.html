@@ -1,0 +1,558 @@
+
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="UTF-8"/>
+        <title>kepler.gl embedded map</title>
+
+        <!--Uber Font-->
+        <link rel="stylesheet" href="https://d1a3f4spazzrp4.cloudfront.net/kepler.gl/uber-fonts/4.0.0/superfine.css">
+
+        <!--Kepler css-->
+        <link href="https://unpkg.com/kepler.gl@3.3.0-alpha.28/umd/keplergl.min.css" rel="stylesheet">
+
+        <!--MapBox css-->
+        <link href="https://api.tiles.mapbox.com/mapbox-gl-js/v1.1.1/mapbox-gl.css" rel="stylesheet">
+        <link href="https://unpkg.com/maplibre-gl@^3/dist/maplibre-gl.css" rel="stylesheet">
+
+        <!-— facebook open graph tags -->
+        <meta property="og:url" content="http://kepler.gl/" />
+        <meta property="og:title" content="Large-scale WebGL-powered Geospatial Data Visualization Tool" />
+        <meta property="og:description" content="Kepler.gl is a powerful web-based geospatial data analysis tool. Built on a high performance rendering engine and designed for large-scale data sets." />
+        <meta property="og:site_name" content="kepler.gl" />
+        <meta property="og:image" content="https://d1a3f4spazzrp4.cloudfront.net/kepler.gl/kepler.gl-meta-tag.png" />
+        <meta property="og:image:type" content="image/png" />
+        <meta property="og:image:width" content="800" />
+        <meta property="og:image:height" content="800" />
+
+        <!-— twitter card tags -->
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:site" content="@openjsf">
+        <meta name="twitter:creator" content="@openjsf">
+        <meta name="twitter:title" content="Large-scale WebGL-powered Geospatial Data Visualization Tool">
+        <meta name="twitter:description" content="Kepler.gl is a powerful web-based geospatial data analysis tool. Built on a high performance rendering engine and designed for large-scale data sets.">
+        <meta name="twitter:image" content="https://d1a3f4spazzrp4.cloudfront.net/kepler.gl/kepler.gl-meta-tag.png" />
+
+        <!--
+          Load React/Redux and the other UMD peer dependencies as ES modules.
+          React >= 19 no longer ships UMD builds, so we pull everything from an
+          ESM CDN (esm.sh) and re-expose them on window as the globals that the
+          kepler.gl UMD bundle (and the inline scripts below) expect.
+
+          IMPORTANT: this file must keep working as a standalone file, i.e. opened
+          directly from disk via the file:// protocol. Native ES module scripts
+          are always fetched with CORS semantics and a file:// document has an
+          opaque (null) origin, so the browser refuses to load native modules or
+          import maps locally. To keep the standalone-file behaviour we run
+          es-module-shims in "shim mode" (importmap-shim / module-shim tags): it
+          is a classic script (loads fine from file://) that resolves the import
+          map and executes the modules as blob: URLs, sidestepping that
+          restriction. The import map pins a single React instance and uses
+          external= so react-redux / styled-components reuse it (otherwise React
+          hooks break).
+        -->
+        <script>
+          // Trigger es-module-shims "shim mode" so it always parses the
+          // importmap-shim / module-shim tags below instead of deferring to the
+          // native loader (which fails under file://).
+          window.esmsInitOptions = {shimMode: true};
+        </script>
+        <script>
+          // Replace the loading overlay with an error message.
+          // Safe to call at any time — once React has mounted and removed
+          // #kepler-load-screen this becomes a no-op.
+          window._keplerShowLoadError = function(msg) {
+            var loadScreen = document.getElementById('kepler-load-screen');
+            if (!loadScreen) return;
+            var spinner = loadScreen.querySelector('.kepler-spinner');
+            var label = loadScreen.querySelector('.kepler-load-label');
+            if (spinner) spinner.style.display = 'none';
+            if (label) label.style.display = 'none';
+            var errEl = document.createElement('div');
+            errEl.className = 'kepler-load-error';
+            errEl.textContent = msg || 'Failed to load the map. Check your internet connection and reload the page.';
+            loadScreen.appendChild(errEl);
+          };
+          // Catch unhandled promise rejections (e.g. ES module imports failing
+          // inside the module-shim script before loadScript is ever called).
+          window.addEventListener('unhandledrejection', function(event) {
+            console.error('kepler.gl: unhandled rejection during map load', event.reason);
+            window._keplerShowLoadError('Failed to load the map. Check your internet connection and reload the page.');
+          });
+        </script>
+        <script src="https://unpkg.com/es-module-shims@2.8.1/dist/es-module-shims.js" crossorigin="anonymous"></script>
+        
+        <script type="importmap-shim">
+          {
+            "imports": {
+              "react": "https://esm.sh/react@19.1.0",
+              "react/jsx-runtime": "https://esm.sh/react@19.1.0/jsx-runtime",
+              "react-dom": "https://esm.sh/react-dom@19.1.0?external=react",
+              "react-dom/client": "https://esm.sh/react-dom@19.1.0/client?external=react",
+              "redux": "https://esm.sh/redux@5.0.1",
+              "react-redux": "https://esm.sh/react-redux@9.3.0?external=react,react-dom,redux",
+              "styled-components": "https://esm.sh/styled-components@6.1.19?external=react,react-dom"
+            }
+          }
+        </script>
+
+        <!--
+          Expose the ES modules as globals for the UMD kepler.gl bundle, then load
+          the kepler.gl UMD script and the app bootstrap script only after those
+          globals are available. The kepler.gl UMD bundle is a classic script
+          (which loads fine from file://), so it is injected dynamically here once
+          the globals are in place to guarantee the correct ordering.
+        -->
+        <script type="module-shim">
+          import * as React from 'react';
+          import * as ReactDOM from 'react-dom';
+          import * as ReactDOMClient from 'react-dom/client';
+          import * as Redux from 'redux';
+          import * as ReactRedux from 'react-redux';
+          import * as StyledComponents from 'styled-components';
+
+          // esm.sh namespaces expose the module's default export under .default.
+          // Normalize so the globals match the shape the React 18 UMD builds had:
+          // - React / Redux / ReactRedux keep their full namespace (named exports).
+          // - ReactDOM merges the classic + client entry so both createPortal and
+          //   createRoot are available (createRoot moved to react-dom/client in v19).
+          // - styled-components' global must be the callable default (styled) with
+          //   its named exports (ThemeProvider, withTheme, css, keyframes, ...)
+          //   attached, since the kepler.gl bundle relies on both.
+          window.React = React.default || React;
+          window.ReactDOM = Object.assign({}, ReactDOM.default || ReactDOM, ReactDOMClient);
+          window.Redux = Redux.default || Redux;
+          window.ReactRedux = ReactRedux.default || ReactRedux;
+          window.styled = Object.assign(StyledComponents.default, StyledComponents);
+
+          function loadScript(src) {
+            return new Promise(function(resolve, reject) {
+              var script = document.createElement('script');
+              script.src = src;
+              script.crossOrigin = 'anonymous';
+              script.onload = resolve;
+              script.onerror = reject;
+              document.head.appendChild(script);
+            });
+          }
+
+          // Load the kepler.gl UMD bundle after the globals are in place, then run
+          // the app bootstrap scripts (marked as type="text/kepler-bootstrap").
+          loadScript("https://unpkg.com/kepler.gl@3.3.0-alpha.28/umd/keplergl.min.js")
+            .then(function() {
+              var bootstraps = document.querySelectorAll('script[type="text/kepler-bootstrap"]');
+              bootstraps.forEach(function(node) {
+                var script = document.createElement('script');
+                script.text = node.textContent;
+                document.body.appendChild(script);
+              });
+            })
+            .catch(function(error) {
+              console.error('kepler.gl: failed to load UMD bundle', error);
+              window._keplerShowLoadError('Failed to load the map bundle. Check your internet connection and reload the page.');
+            });
+        </script>
+        <style type="text/css">
+          body {margin: 0; padding: 0; overflow: hidden;}
+          #kepler-load-screen {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #29323c;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            z-index: 9999;
+            font-family: ff-clan-web-pro, 'Helvetica Neue', Helvetica, sans-serif;
+            color: #a0a7b4;
+          }
+          #kepler-load-screen .kepler-spinner {
+            width: 48px; height: 48px;
+            border: 4px solid rgba(255,255,255,0.08);
+            border-top-color: #1fbad6;
+            border-radius: 50%;
+            animation: kepler-spin 0.8s linear infinite;
+          }
+          #kepler-load-screen .kepler-load-label {
+            font-size: 13px;
+            letter-spacing: 0.5px;
+          }
+          #kepler-load-screen .kepler-load-error {
+            font-size: 13px;
+            color: #f05e45;
+            max-width: 360px;
+            text-align: center;
+            line-height: 1.5;
+          }
+          @keyframes kepler-spin { to { transform: rotate(360deg); } }
+        </style>
+
+        <!--MapBox token-->
+        <!--
+          SECURITY NOTE: Your Mapbox access token is embedded below in plain text.
+          Anyone with access to this HTML file can see and use this token.
+          Consider using a scoped token with URL restrictions to limit misuse.
+          See: https://docs.mapbox.com/accounts/guides/tokens/#url-restrictions
+        -->
+        <script>
+          /**
+           * Provide your MapBox Token
+           **/
+          window.MAPBOX_TOKEN = "";
+          window.WARNING_MESSAGE = 'No Mapbox token provided. Mapbox basemaps will not be available. To enable them, edit this file and set MAPBOX_TOKEN to your Mapbox access key.';
+        </script>
+      </head>
+      <body>
+        <!-- We will put our React component inside this div. -->
+        <div id="app">
+          <div id="kepler-load-screen">
+            <div class="kepler-spinner"></div>
+            <div class="kepler-load-label">Loading map…</div>
+          </div>
+        </div>
+
+        <!--
+          Load our React component. This script is not executed inline: it is run
+          by the module shim in <head> once the kepler.gl UMD bundle (and its
+          global peer dependencies) have finished loading.
+        -->
+        <script type="text/kepler-bootstrap">
+          /* Validate Mapbox Token */
+          if ((MAPBOX_TOKEN || '') === '' || MAPBOX_TOKEN === 'PROVIDE_MAPBOX_TOKEN') {
+            console.warn('[kepler.gl]', WARNING_MESSAGE);
+          }
+
+          const branding = {"appName":"kepler.gl","appWebsite":"http://kepler.gl/","appIcon":null,"appNameColor":"#1FBAD6"};
+
+          /** STORE **/
+          // Pre-seed styleType so the correct basemap fetch starts on the very
+          // first render, avoiding a flash of the default dark basemap.
+          // options.config has the versioned envelope shape: { version, config: { mapStyle, ... } }
+          const savedStyleType = "dark-matter";
+
+          const reducers = (function createReducers(redux, keplerGl, styleType) {
+            return redux.combineReducers({
+              // mount keplerGl reducer
+              keplerGl: keplerGl.keplerGlReducer.initialState({
+                uiState: {
+                  readOnly: true,
+                  currentModal: null,
+                  exportMap: Object.assign({}, keplerGl.INITIAL_UI_STATE.exportMap, branding)
+                },
+                ...(styleType ? {mapStyle: {styleType}} : {})
+              })
+            });
+          }(Redux, KeplerGl, savedStyleType));
+
+          const middleWares = (function createMiddlewares(keplerGl) {
+            return keplerGl.enhanceReduxMiddleware([
+              // Add other middlewares here
+            ]);
+          }(KeplerGl));
+
+          const enhancers = (function craeteEnhancers(redux, middles) {
+            return redux.applyMiddleware(...middles);
+          }(Redux, middleWares));
+
+          const store = (function createStore(redux, enhancers) {
+            return redux.createStore(
+              reducers,
+              {},
+              redux.compose(enhancers)
+            );
+          }(Redux, enhancers));
+          /** END STORE **/
+
+          /** COMPONENTS **/
+          var BrandLogo = (function createBrandLogo(react, branding) {
+            return function BrandLogo(props) {
+              var fixed = Boolean(props && props.fixed);
+              var icon = branding.appIcon
+                ? react.createElement("img", {
+                    src: branding.appIcon,
+                    alt: "",
+                    "aria-hidden": true,
+                    style: {width: "22px", height: "15px", objectFit: "contain"}
+                  })
+                : react.createElement(
+                    "svg",
+                    {width: "22px", height: "15px", viewBox: "0 0 22 15", "aria-hidden": true},
+                    react.createElement(
+                      "g",
+                      {transform: "translate(11, -3) rotate(45.000000)"},
+                      react.createElement("rect", {fill: "#535C6C", x: "0", y: "5", width: "10", height: "10"}),
+                      react.createElement("rect", {fill: "#1FBAD6", x: "5", y: "0", width: "10", height: "10"})
+                    )
+                  );
+
+              return react.createElement(
+                "div",
+                {
+                  className: fixed ? "logo-container" : "side-panel-logo",
+                  style: fixed
+                    ? {position: "fixed", zIndex: 10000, padding: "4px", display: "flex", alignItems: "center"}
+                    : {display: "flex", alignItems: "flex-start"}
+                },
+                react.createElement(
+                  "div",
+                  {style: {marginTop: fixed ? 0 : "3px"}},
+                  icon
+                ),
+                react.createElement(
+                  "div",
+                  {className: "logo__title", style: {marginLeft: "6px"}},
+                  react.createElement(
+                    "a",
+                    {
+                      className: "kepler_gl__logo logo__link",
+                      href: branding.appWebsite,
+                      target: "_blank",
+                      rel: "noopener noreferrer",
+                      style: {
+                        color: branding.appNameColor,
+                        fontFamily: "ff-clan-web-pro, 'Helvetica Neue', Helvetica, sans-serif",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        letterSpacing: "1.17px",
+                        textDecoration: "none"
+                      }
+                    },
+                    react.createElement("span", {style: {color: branding.appNameColor}}, branding.appName)
+                  ),
+                  !fixed && props && props.version
+                    ? react.createElement(
+                        "div",
+                        {
+                          className: "logo__version",
+                          style: {fontSize: "10px", color: "#a0a7b4", letterSpacing: "0.83px", lineHeight: "14px"}
+                        },
+                        props.version
+                      )
+                    : null
+                )
+              );
+            };
+          }(React, branding));
+
+          /** Custom map control factory to restore export editing and chart display. **/
+          var CustomMapControlFactory = (function createCustomMapControl(react, keplerGl) {
+            var EffectControlFactory = keplerGl.EffectControlFactory;
+            var EffectManagerFactory = keplerGl.EffectManagerFactory;
+            var AnnotationControlFactory = keplerGl.AnnotationControlFactory;
+            var AnnotationManagerFactory = keplerGl.AnnotationManagerFactory;
+            var ChartControlFactory = keplerGl.ChartControlFactory;
+            var ChartManagerFactory = keplerGl.ChartManagerFactory;
+            var MapControlFactory = keplerGl.MapControlFactory;
+
+            if (
+              !EffectControlFactory ||
+              !EffectManagerFactory ||
+              !AnnotationControlFactory ||
+              !AnnotationManagerFactory ||
+              !ChartControlFactory ||
+              !ChartManagerFactory ||
+              !MapControlFactory
+            ) {
+              console.warn('kepler.gl: Export control factories not available, skipping control injection');
+              return null;
+            }
+
+            function ExportMapControlFactory(
+              EffectControl,
+              EffectManager,
+              AnnotationControl,
+              AnnotationManager,
+              ChartControl,
+              ChartManager
+            ) {
+              var args = Array.prototype.slice.call(arguments, 6);
+              var MapControl = MapControlFactory.apply(null, args);
+              var defaultActionComponents = MapControl.defaultActionComponents || [];
+
+              var ExportMapControl = function ExportMapControl(props) {
+                var readOnly = Boolean(props.readOnly);
+                var mapControls = props.mapControls || {};
+                var charts = props.charts || [];
+                var actionComponents = defaultActionComponents.filter(function(ActionComponent) {
+                  return !readOnly || ActionComponent !== AnnotationControl;
+                });
+                if (!readOnly) {
+                  actionComponents = actionComponents.concat([ChartControl, EffectControl]);
+                }
+                var showEffects = !readOnly && Boolean(mapControls.effect && mapControls.effect.active);
+                var showAnnotations = !readOnly && Boolean(mapControls.annotation && mapControls.annotation.active);
+                var showChartPanel = !readOnly && Boolean(mapControls.chart && mapControls.chart.active);
+                var hasPinnedCharts = charts.some(function(chart) { return chart.pinned !== false; });
+                var showCharts = readOnly ? charts.length > 0 : showChartPanel || hasPinnedCharts;
+                var rightPanelVisible = showEffects || showAnnotations || showCharts;
+                return react.createElement(
+                  'div',
+                  {style: {
+                    position: 'absolute',
+                    display: 'flex',
+                    top: (props.top || 0) + 'px',
+                    right: 0,
+                    zIndex: 1,
+                    maxHeight: '100%',
+                    pointerEvents: 'none'
+                  }},
+                  react.createElement(
+                    'div',
+                    {style: {position: 'relative', pointerEvents: 'all'}},
+                    react.createElement(MapControl, Object.assign({}, props, {top: 0, actionComponents: actionComponents}))
+                  ),
+                  rightPanelVisible
+                    ? react.createElement('div', {
+                        style: {
+                          maxHeight: '100%',
+                          overflow: 'hidden',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          pointerEvents: 'all',
+                          marginTop: '10px'
+                        }
+                      },
+                      showAnnotations ? react.createElement(AnnotationManager, null) : null,
+                      showCharts ? react.createElement(ChartManager, {
+                        panelActive: showChartPanel,
+                        isExport: readOnly
+                      }) : null,
+                      showEffects ? react.createElement(EffectManager, null) : null
+                      )
+                    : null
+                );
+              };
+
+              return ExportMapControl;
+            }
+            ExportMapControlFactory.deps = [
+              EffectControlFactory,
+              EffectManagerFactory,
+              AnnotationControlFactory,
+              AnnotationManagerFactory,
+              ChartControlFactory,
+              ChartManagerFactory
+            ].concat(MapControlFactory.deps);
+
+            return [MapControlFactory, ExportMapControlFactory];
+          }(React, KeplerGl));
+
+          var CustomPanelHeaderFactory = (function createCustomPanelHeader(react, keplerGl, BrandLogo) {
+            var PanelHeaderFactory = keplerGl.PanelHeaderFactory;
+            if (!PanelHeaderFactory) {
+              console.warn('kepler.gl: Panel header factory not available, skipping branding injection');
+              return null;
+            }
+
+            function ExportPanelHeaderFactory() {
+              var PanelHeader = PanelHeaderFactory.apply(null, arguments);
+              return function ExportPanelHeader(props) {
+                return react.createElement(
+                  PanelHeader,
+                  Object.assign({}, props, {logoComponent: BrandLogo})
+                );
+              };
+            }
+            ExportPanelHeaderFactory.deps = PanelHeaderFactory.deps;
+            return [PanelHeaderFactory, ExportPanelHeaderFactory];
+          }(React, KeplerGl, BrandLogo));
+
+          var CustomFactories = [CustomMapControlFactory, CustomPanelHeaderFactory].filter(Boolean);
+          var KeplerGlComponent = CustomFactories.length
+            ? KeplerGl.injectComponents(CustomFactories)
+            : KeplerGl.KeplerGl;
+
+          var KeplerElement = (function makeKeplerElement(react, keplerGl, mapboxToken, branding, BrandLogo) {
+            return function App() {
+              var rootElm = react.useRef(null);
+              var _useState = react.useState({
+                width: window.innerWidth,
+                height: window.innerHeight
+              });
+              var windowDimension = _useState[0];
+              var setDimension = _useState[1];
+              react.useEffect(function sideEffect(){
+                function handleResize() {
+                  setDimension({width: window.innerWidth, height: window.innerHeight});
+                };
+                window.addEventListener('resize', handleResize);
+                return function() {window.removeEventListener('resize', handleResize);};
+              }, []);
+              // Remove the loading overlay after the first render is painted.
+              // useEffect fires post-commit, so this is safe under React 19's
+              // concurrent renderer — the map is visible before the overlay goes away.
+              react.useEffect(function removeLoadScreen() {
+                var loadScreen = document.getElementById('kepler-load-screen');
+                if (loadScreen) loadScreen.remove();
+              }, []);
+              return react.createElement(
+                'div',
+                {style: {position: 'absolute', left: 0, width: '100vw', height: '100vh'}},
+                react.createElement(BrandLogo, {fixed: true}),
+                react.createElement(KeplerGlComponent, {
+                  mapboxApiAccessToken: mapboxToken,
+                  id: "map",
+                  width: windowDimension.width,
+                  height: windowDimension.height,
+                  appName: branding.appName,
+                  appWebsite: branding.appWebsite
+                })
+              )
+            }
+          }(React, KeplerGl, MAPBOX_TOKEN, branding, BrandLogo));
+
+          const app = (function createReactReduxProvider(react, reactRedux, KeplerElement) {
+            return react.createElement(
+              reactRedux.Provider,
+              {store},
+              react.createElement(KeplerElement, null)
+            )
+          }(React, ReactRedux, KeplerElement));
+          /** END COMPONENTS **/
+
+          /** Render **/
+          (function render(react, reactDOM, app) {
+            const container = document.getElementById('app');
+            const root = reactDOM.createRoot(container);
+            root.render(app);
+          }(React, ReactDOM, app));
+
+          /**
+           * Customize map.
+           * In the following section you can use the store object to dispatch Kepler.gl actions
+           * to add new data and customize behavior
+           */
+          (function customize(keplerGl, store) {
+            const datasets = [{"version":"v1","data":{"id":"-rbz3cg","label":"lorimer_all_animals_by_location (1).csv","color":[143,47,191],"allData":[["'Aishmah","Camel",null,null,"618","No reliable exact-name coordinate match.",20],["'Ajman","Camel",25.40177,55.47878,"53","Selected Ajman town coordinate record; alternate coordinate record exists.",60],["Bihdih","Camel",27.108,53.3682,"179","Matched to Bihdih in Asuh Darveh entries.",80],["Bithnah","Camel",25.18951,56.23516,"618","Exact-name match.",15],["Dhadnah","Camel",25.52422,56.35868,"1695","Exact-name match.",3],["Dubai","Camel",25,55.33333,"Unclear","Matched to Dibai town record in Zenodo; coordinate is dataset's gazetteer point.",1650],["Hair","Camel",25.38148,55.41955,"758–759","Selected Hair in Sharjah-area entries; other places with similar name exist.",40],["Hashniz","Camel",27.08088,53.52951,"179","Exact-name match in Asuh Darveh.",70],["Jumairah","Camel",25.20795,55.24969,"454","Exact-name match.",5],["Khan","Camel",25.33141,55.35901,"Unclear","Selected Khan in Sharjah-area entries; same name occurs elsewhere.",115],["Kunardun","Camel",27.1365,53.3013,"179","Exact-name match in Asuh Darveh.",20],["Lusail","Camel",25.4908,51.48439,"Unclear","Exact-name match in Qatar entries.",70],["Mahadhah Village","Camel",24.40472,55.95333,"1119","Matched to Mahadhah in Oman Trucial / Mahadhah entries.",300],["Masafi","Camel",25.30129,56.16531,"619","Exact-name match.",20],["Qumzan","Camel",null,null,"1934","No reliable exact-name coordinate match.",100],["Rumaihath","Camel",null,null,"1934","No reliable exact-name coordinate match.",100],["Sfun(i)","Camel",25.1707,56.10159,"619","Matched to Sfun in Ham Wadi.",30],["Sha'am","Camel",26.0279,56.08352,"Unclear","Matched to Sha'am in Ras al-Khaimah / Oman Trucial entries.",30],["Siji","Camel",25.24764,56.07719,"620","Exact-name match.",10],["Tayibah","Camel",null,null,"620","No reliable exact-name match under this spelling.",10],["'Aishmah","Cattle",null,null,"618","No reliable exact-name coordinate match.",40],["'Ajman","Cattle",25.40177,55.47878,"53","Selected Ajman town coordinate record; alternate coordinate record exists.",100],["Bidyah","Cattle",25.43227,56.34574,"Unclear","Selected Sharqiyin/Fujairah-area match; another Bidyah exists in Oman.",15],["Bihdih","Cattle",27.108,53.3682,"179","Matched to Bihdih in Asuh Darveh entries.",230],["Bithnah","Cattle",25.18951,56.23516,"618","Exact-name match.",20],["Dair","Cattle",26.28417,50.62361,"361","Selected Dair in Bahrain Principality entries; same name occurs in Iraq.",13],["Dhadnah","Cattle",25.52422,56.35868,"1695","Exact-name match.",100],["Dubai","Cattle",25,55.33333,"Unclear","Matched to Dibai town record in Zenodo; coordinate is dataset's gazetteer point.",430],["Fara'","Cattle",25.4143,56.09123,"619","Selected Ham Wadi-area match; same name occurs in other regions.",10],["Hair","Cattle",25.38148,55.41955,"758–759","Selected Hair in Sharjah-area entries; other places with similar name exist.",40],["Hashniz","Cattle",27.08088,53.52951,"179","Exact-name match in Asuh Darveh.",150],["Jumairah","Cattle",25.20795,55.24969,"454","Exact-name match.",45],["Khan","Cattle",25.33141,55.35901,"Unclear","Selected Khan in Sharjah-area entries; same name occurs elsewhere.",35],["Kunardun","Cattle",27.1365,53.3013,"179","Exact-name match in Asuh Darveh.",30],["Mahadhah Village","Cattle",24.40472,55.95333,"1119","Matched to Mahadhah in Oman Trucial / Mahadhah entries.",400],["Masafi","Cattle",25.30129,56.16531,"619","Exact-name match.",30],["Rifa'-ash-Sharqi","Cattle",26.12389,50.57361,"Unclear","Selected Bahrain Island match; another close coordinate record exists.",20],["Sfun(i)","Cattle",25.1707,56.10159,"619","Matched to Sfun in Ham Wadi.",60],["Sha'am","Cattle",26.0279,56.08352,"Unclear","Matched to Sha'am in Ras al-Khaimah / Oman Trucial entries.",20],["Siji","Cattle",25.24764,56.07719,"620","Exact-name match.",30],["Tayibah","Cattle",null,null,"620","No reliable exact-name match under this spelling.",70],["'Aishmah","Donkey",null,null,"618","No reliable exact-name coordinate match.",40],["'Ajman","Donkey",25.40177,55.47878,"53","Selected Ajman town coordinate record; alternate coordinate record exists.",100],["Bihdih","Donkey",27.108,53.3682,"179","Matched to Bihdih in Asuh Darveh entries.",200],["Bithnah","Donkey",25.18951,56.23516,"618","Exact-name match.",30],["Dair","Donkey",26.28417,50.62361,"361","Selected Dair in Bahrain Principality entries; same name occurs in Iraq.",30],["Dhadnah","Donkey",25.52422,56.35868,"1695","Exact-name match.",10],["Dubai","Donkey",25,55.33333,"Unclear","Matched to Dibai town record in Zenodo; coordinate is dataset's gazetteer point.",380],["Hair","Donkey",25.38148,55.41955,"758–759","Selected Hair in Sharjah-area entries; other places with similar name exist.",60],["Hashniz","Donkey",27.08088,53.52951,"179","Exact-name match in Asuh Darveh.",200],["Jumairah","Donkey",25.20795,55.24969,"454","Exact-name match.",60],["Khan","Donkey",25.33141,55.35901,"Unclear","Selected Khan in Sharjah-area entries; same name occurs elsewhere.",85],["Kunardun","Donkey",27.1365,53.3013,"179","Exact-name match in Asuh Darveh.",50],["Mahadhah Village","Donkey",24.40472,55.95333,"1119","Matched to Mahadhah in Oman Trucial / Mahadhah entries.",400],["Masafi","Donkey",25.30129,56.16531,"619","Exact-name match.",50],["Pudar","Donkey",28.975,50.86111,"336","Exact-name match in Bushehr Peninsula.",12],["Rifa'-ash-Sharqi","Donkey",26.12389,50.57361,"Unclear","Selected Bahrain Island match; another close coordinate record exists.",85],["Sfun(i)","Donkey",25.1707,56.10159,"619","Matched to Sfun in Ham Wadi.",200],["Sha'am","Donkey",26.0279,56.08352,"Unclear","Matched to Sha'am in Ras al-Khaimah / Oman Trucial entries.",50],["Siji","Donkey",25.24764,56.07719,"620","Exact-name match.",25],["Tayibah","Donkey",null,null,"620","No reliable exact-name match under this spelling.",60],["'Ajman","Goat",25.40177,55.47878,"53","Selected Ajman town coordinate record; alternate coordinate record exists.",400],["Dubai","Goat",25,55.33333,"Unclear","Matched to Dibai town record in Zenodo; coordinate is dataset's gazetteer point.",960],["'Ajman","Horse",25.40177,55.47878,"53","Selected Ajman town coordinate record; alternate coordinate record exists.",20],["Bajairiyah","Horse",null,null,"17","No reliable exact-name coordinate match.",10],["Bidyah","Horse",25.43227,56.34574,"Unclear","Selected Sharqiyin/Fujairah-area match; another Bidyah exists in Oman.",30],["Davas","Horse",28.9172,50.823,"334","Exact-name match in Bushehr Peninsula.",30],["Diftah","Horse",25.27226,56.18353,"619","Exact-name match in Ham Wadi / Naqbiyin entries.",20],["Dubai","Horse",25,55.33333,"Unclear","Matched to Dibai town record in Zenodo; coordinate is dataset's gazetteer point.",45],["Fara'","Horse",25.4143,56.09123,"619","Selected Ham Wadi-area match; same name occurs in other regions.",40],["Gharifah","Horse",24.99525,55.85787,"1695","Matched to Gharif; spelling differs from the extracted name.",10],["Jamrah (Bani)","Horse",26.20972,50.45972,"221","Matched to Bani Jamrah in Bahrain entries.",25],["Jannūsān","Horse",26.23056,50.49472,"221","Exact-name match; Bahrain Island.",15],["Janābiyah","Horse",26.19,50.46778,"221","Exact-name match; Bahrain Island.",8],["Jasrah","Horse",26.16472,50.44722,"221","Selected Bahrain Island match; another nearby coordinate record exists.",9],["Jau","Horse",25.99861,50.61667,"221","Selected Bahrain Island match based on neighboring entries; same name occurs elsewhere.",8],["Rifa'-ash-Sharqi","Horse",26.12389,50.57361,"Unclear","Selected Bahrain Island match; another close coordinate record exists.",16],["Bidyah","Sheep",25.43227,56.34574,"Unclear","Selected Sharqiyin/Fujairah-area match; another Bidyah exists in Oman.",200],["Davas","Sheep",28.9172,50.823,"334","Exact-name match in Bushehr Peninsula.",20],["Diftah","Sheep",25.27226,56.18353,"619","Exact-name match in Ham Wadi / Naqbiyin entries.",30],["Fara'","Sheep",25.4143,56.09123,"619","Selected Ham Wadi-area match; same name occurs in other regions.",20],["Gharifah","Sheep",24.99525,55.85787,"1695","Matched to Gharif; spelling differs from the extracted name.",100],["Jannūsān","Sheep",26.23056,50.49472,"221","Exact-name match; Bahrain Island.",5],["Jasrah","Sheep",26.16472,50.44722,"221","Selected Bahrain Island match; another nearby coordinate record exists.",2],["Jau","Sheep",25.99861,50.61667,"221","Selected Bahrain Island match based on neighboring entries; same name occurs elsewhere.",25],["Khalaibiyah","Sheep",25.38124,56.17358,"619","Exact-name match in nearby regional entries.",30],["Lusail","Sheep",25.4908,51.48439,"Unclear","Exact-name match in Qatar entries.",20],["Masafi","Sheep",25.30129,56.16531,"619","Exact-name match.",850]],"fields":[{"name":"Location","type":"string","format":"","analyzerType":"STRING"},{"name":"Animal_Type","type":"string","format":"","analyzerType":"STRING"},{"name":"Latitude","type":"real","format":"","analyzerType":"FLOAT"},{"name":"Longitude","type":"real","format":"","analyzerType":"FLOAT"},{"name":"Printed_Page","type":"string","format":"","analyzerType":"STRING"},{"name":"Coordinate_Verification","type":"string","format":"","analyzerType":"STRING"},{"name":"Count","type":"integer","format":"","analyzerType":"INT"}],"type":"","metadata":{"id":"-rbz3cg","format":"row","label":"lorimer_all_animals_by_location (1).csv","size":7807},"disableDataOperation":false}}];
+            const config = {"version":"v1","config":{"visState":{"filters":[],"layers":[{"id":"fswy6g","type":"point","config":{"dataId":"-rbz3cg","columnMode":"points","label":"lorimer_all_animals_by_location (1)","color":[218,112,191],"highlightColor":[252,242,26,255],"columns":{"lat":"Latitude","lng":"Longitude"},"isVisible":true,"visConfig":{"pulseTrigger":"continuous","pulseTimeField":"","pulseDurationMs":1000,"glowEnabled":false,"glowExtent":2,"glowStrength":0.5,"pulseEnabled":false,"pulseMode":"pulse","pulseSpeed":1,"pulseExpansion":2,"radius":10,"fixedRadius":false,"opacity":0.8,"outline":false,"thickness":2,"strokeColor":null,"colorRange":{"colors":["#7FC97F","#BEAED4","#FDC086","#FFFF99","#386CB0","#F0027F"],"name":"Accent","type":"qualitative","category":"ColorBrewer","colorMap":[["Camel","#7FC97F"],["Cattle","#BEAED4"],["Donkey","#FDC086"],["Goat","#FFFF99"],["Horse","#386CB0"],["Sheep","#F0027F"]]},"strokeColorRange":{"name":"Global Warming","type":"sequential","category":"Uber","colors":["#4C0035","#880030","#B72F15","#D6610A","#EF9100","#FFC300"]},"radiusRange":[0,90],"filled":true,"billboard":false,"allowHover":true,"showNeighborOnHover":true,"showHighlightColor":true},"hidden":false,"textLabel":[]},"visualChannels":{"colorField":{"name":"Animal_Type","type":"string"},"colorScale":"ordinal","strokeColorField":null,"strokeColorScale":"quantile","sizeField":{"name":"Count","type":"integer"},"sizeScale":"sqrt"}}],"effects":[],"annotations":[],"interactionConfig":{"tooltip":{"fieldsToShow":{"-rbz3cg":[{"name":"Animal_Type","id":"Animal_Type","displayName":"Animal_Type","format":"","fieldIdx":1,"type":"string","analyzerType":"STRING"},{"name":"Count","id":"Count","displayName":"Count","format":"","fieldIdx":6,"type":"integer","analyzerType":"INT"},{"name":"Location","id":"Location","displayName":"Location","format":"","fieldIdx":0,"type":"string","analyzerType":"STRING"},{"name":"Longitude","id":"Longitude","displayName":"Longitude","format":"","fieldIdx":3,"type":"real","analyzerType":"FLOAT"},{"name":"Latitude","id":"Latitude","displayName":"Latitude","format":"","fieldIdx":2,"type":"real","analyzerType":"FLOAT"}]},"timezone":null,"compareMode":false,"compareType":"absolute","enabled":true},"legend":{"hideInvisibleLayers":false,"enabled":false},"brush":{"size":2.5,"enabled":false},"geocoder":{"limitSearch":false,"color":[255,0,0],"enabled":false},"coordinate":{"enabled":false},"annotation":{"enabled":false},"zoomOpacity":{"controllers":[],"enabled":false}},"layerBlending":"subtractive","overlayBlending":"normal","splitMaps":[],"animationConfig":{"currentTime":null,"speed":1,"timeFormat":null,"timezone":null},"editor":{"features":[],"visible":true},"layerOrder":["fswy6g"],"groupBys":[],"joins":[]},"mapState":{"bearing":0,"dragRotate":false,"latitude":25.19345356682708,"longitude":55.08743138385359,"pitch":0,"zoom":7.861402602183342,"isSplit":false,"isViewportSynced":true,"isZoomLocked":false,"splitMapViewports":[],"maxPitch":60,"mapSplitMode":"SINGLE_MAP","swipeComparePercentage":50,"mapViewMode":"MODE_2D","globe":{"enabled":false,"config":{"atmosphere":true,"hugeHalo":true,"hugeHaloRadius":3.5,"hugeHaloOpacity":0.2,"azimuth":false,"azimuthAngle":45,"terminator":true,"terminatorOpacity":0.35,"basemap":true,"labels":false,"labelsColor":[114.75,114.75,114.75],"adminLines":true,"adminLinesColor":[40,63,93],"water":true,"waterColor":[17,35,48],"surface":true,"surfaceColor":[9,16,29],"backgroundColor":[4,9,17],"stars":true}}},"mapStyle":{"styleType":"dark-matter","topLayerGroups":{},"visibleLayerGroups":{"label":true,"road":true,"border":false,"building":true,"water":true,"land":true,"3d building":false},"threeDBuildingColor":[15.035172933000911,15.035172933000911,15.035172933000911],"backgroundColor":[0,0,0],"mapStyles":{}},"uiState":{"mapControls":{"mapLegend":{"active":false},"chart":{"active":false},"cameraBookmarks":{"show":false,"settings":{"position":{"x":60,"y":20,"anchorX":"right","anchorY":"top"},"contentHeight":-1}},"mapInfo":{"active":true,"show":true}},"locale":"en","theme":"dark"}}};
+            const info = null;
+
+            const loadedData = keplerGl.KeplerGlSchema.load(
+              datasets,
+              config
+            );
+
+            // The 500 ms delay is a historical workaround for a race where
+            // keplerGl re-initialises and overwrites config applied synchronously.
+            // The pre-seeded styleType above removes the basemap flash on first
+            // render; this dispatch still applies the full saved config (layers,
+            // viewport, layer groups, etc.) once the component has settled.
+            window.setTimeout(() => {
+              store.dispatch(
+                keplerGl.addDataToMap({
+                  datasets: loadedData.datasets,
+                  config: loadedData.config,
+                  info,
+                  options: {
+                    centerMap: false,
+                  },
+                })
+              );
+            }, 500);
+          }(KeplerGl, store))
+        </script>
+      </body>
+    </html>
+  
