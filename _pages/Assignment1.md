@@ -41,6 +41,22 @@ In terms of our investigation’s transferability, the methods of distant readin
 
 Overall, this investigation changed how we understand science fiction and the ways it can be studied. Although we initially expected space exploration to dominate the genre, our findings highlighted the importance of human society in the collection we examined. Distant reading allowed us to explore a large number of texts efficiently, but still limited us in terms of reasoning and context. 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Contributions:--
 Conceptualization: Reem Alzarooni and Sarah Farzaneh 
 
