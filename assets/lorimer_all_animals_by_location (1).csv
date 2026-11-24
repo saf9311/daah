@@ -1,0 +1,89 @@
+Location,Animal_Type,Latitude,Longitude,Printed_Page,Coordinate_Verification,Count
+'Aishmah,Camel,,,618,No reliable exact-name coordinate match.,20
+'Ajman,Camel,25.40177,55.47878,53,Selected Ajman town coordinate record; alternate coordinate record exists.,60
+Bihdih,Camel,27.108,53.3682,179,Matched to Bihdih in Asuh Darveh entries.,80
+Bithnah,Camel,25.18951,56.23516,618,Exact-name match.,15
+Dhadnah,Camel,25.52422,56.35868,1695,Exact-name match.,3
+Dubai,Camel,25.0,55.33333,Unclear,Matched to Dibai town record in Zenodo; coordinate is dataset's gazetteer point.,1650
+Hair,Camel,25.38148,55.41955,758–759,Selected Hair in Sharjah-area entries; other places with similar name exist.,40
+Hashniz,Camel,27.08088,53.52951,179,Exact-name match in Asuh Darveh.,70
+Jumairah,Camel,25.20795,55.24969,454,Exact-name match.,5
+Khan,Camel,25.33141,55.35901,Unclear,Selected Khan in Sharjah-area entries; same name occurs elsewhere.,115
+Kunardun,Camel,27.1365,53.3013,179,Exact-name match in Asuh Darveh.,20
+Lusail,Camel,25.4908,51.48439,Unclear,Exact-name match in Qatar entries.,70
+Mahadhah Village,Camel,24.40472,55.95333,1119,Matched to Mahadhah in Oman Trucial / Mahadhah entries.,300
+Masafi,Camel,25.30129,56.16531,619,Exact-name match.,20
+Qumzan,Camel,,,1934,No reliable exact-name coordinate match.,100
+Rumaihath,Camel,,,1934,No reliable exact-name coordinate match.,100
+Sfun(i),Camel,25.1707,56.10159,619,Matched to Sfun in Ham Wadi.,30
+Sha'am,Camel,26.0279,56.08352,Unclear,Matched to Sha'am in Ras al-Khaimah / Oman Trucial entries.,30
+Siji,Camel,25.24764,56.07719,620,Exact-name match.,10
+Tayibah,Camel,,,620,No reliable exact-name match under this spelling.,10
+'Aishmah,Cattle,,,618,No reliable exact-name coordinate match.,40
+'Ajman,Cattle,25.40177,55.47878,53,Selected Ajman town coordinate record; alternate coordinate record exists.,100
+Bidyah,Cattle,25.43227,56.34574,Unclear,Selected Sharqiyin/Fujairah-area match; another Bidyah exists in Oman.,15
+Bihdih,Cattle,27.108,53.3682,179,Matched to Bihdih in Asuh Darveh entries.,230
+Bithnah,Cattle,25.18951,56.23516,618,Exact-name match.,20
+Dair,Cattle,26.28417,50.62361,361,Selected Dair in Bahrain Principality entries; same name occurs in Iraq.,13
+Dhadnah,Cattle,25.52422,56.35868,1695,Exact-name match.,100
+Dubai,Cattle,25.0,55.33333,Unclear,Matched to Dibai town record in Zenodo; coordinate is dataset's gazetteer point.,430
+Fara',Cattle,25.4143,56.09123,619,Selected Ham Wadi-area match; same name occurs in other regions.,10
+Hair,Cattle,25.38148,55.41955,758–759,Selected Hair in Sharjah-area entries; other places with similar name exist.,40
+Hashniz,Cattle,27.08088,53.52951,179,Exact-name match in Asuh Darveh.,150
+Jumairah,Cattle,25.20795,55.24969,454,Exact-name match.,45
+Khan,Cattle,25.33141,55.35901,Unclear,Selected Khan in Sharjah-area entries; same name occurs elsewhere.,35
+Kunardun,Cattle,27.1365,53.3013,179,Exact-name match in Asuh Darveh.,30
+Mahadhah Village,Cattle,24.40472,55.95333,1119,Matched to Mahadhah in Oman Trucial / Mahadhah entries.,400
+Masafi,Cattle,25.30129,56.16531,619,Exact-name match.,30
+Rifa'-ash-Sharqi,Cattle,26.12389,50.57361,Unclear,Selected Bahrain Island match; another close coordinate record exists.,20
+Sfun(i),Cattle,25.1707,56.10159,619,Matched to Sfun in Ham Wadi.,60
+Sha'am,Cattle,26.0279,56.08352,Unclear,Matched to Sha'am in Ras al-Khaimah / Oman Trucial entries.,20
+Siji,Cattle,25.24764,56.07719,620,Exact-name match.,30
+Tayibah,Cattle,,,620,No reliable exact-name match under this spelling.,70
+'Aishmah,Donkey,,,618,No reliable exact-name coordinate match.,40
+'Ajman,Donkey,25.40177,55.47878,53,Selected Ajman town coordinate record; alternate coordinate record exists.,100
+Bihdih,Donkey,27.108,53.3682,179,Matched to Bihdih in Asuh Darveh entries.,200
+Bithnah,Donkey,25.18951,56.23516,618,Exact-name match.,30
+Dair,Donkey,26.28417,50.62361,361,Selected Dair in Bahrain Principality entries; same name occurs in Iraq.,30
+Dhadnah,Donkey,25.52422,56.35868,1695,Exact-name match.,10
+Dubai,Donkey,25.0,55.33333,Unclear,Matched to Dibai town record in Zenodo; coordinate is dataset's gazetteer point.,380
+Hair,Donkey,25.38148,55.41955,758–759,Selected Hair in Sharjah-area entries; other places with similar name exist.,60
+Hashniz,Donkey,27.08088,53.52951,179,Exact-name match in Asuh Darveh.,200
+Jumairah,Donkey,25.20795,55.24969,454,Exact-name match.,60
+Khan,Donkey,25.33141,55.35901,Unclear,Selected Khan in Sharjah-area entries; same name occurs elsewhere.,85
+Kunardun,Donkey,27.1365,53.3013,179,Exact-name match in Asuh Darveh.,50
+Mahadhah Village,Donkey,24.40472,55.95333,1119,Matched to Mahadhah in Oman Trucial / Mahadhah entries.,400
+Masafi,Donkey,25.30129,56.16531,619,Exact-name match.,50
+Pudar,Donkey,28.975,50.86111,336,Exact-name match in Bushehr Peninsula.,12
+Rifa'-ash-Sharqi,Donkey,26.12389,50.57361,Unclear,Selected Bahrain Island match; another close coordinate record exists.,85
+Sfun(i),Donkey,25.1707,56.10159,619,Matched to Sfun in Ham Wadi.,200
+Sha'am,Donkey,26.0279,56.08352,Unclear,Matched to Sha'am in Ras al-Khaimah / Oman Trucial entries.,50
+Siji,Donkey,25.24764,56.07719,620,Exact-name match.,25
+Tayibah,Donkey,,,620,No reliable exact-name match under this spelling.,60
+'Ajman,Goat,25.40177,55.47878,53,Selected Ajman town coordinate record; alternate coordinate record exists.,400
+Dubai,Goat,25.0,55.33333,Unclear,Matched to Dibai town record in Zenodo; coordinate is dataset's gazetteer point.,960
+'Ajman,Horse,25.40177,55.47878,53,Selected Ajman town coordinate record; alternate coordinate record exists.,20
+Bajairiyah,Horse,,,17,No reliable exact-name coordinate match.,10
+Bidyah,Horse,25.43227,56.34574,Unclear,Selected Sharqiyin/Fujairah-area match; another Bidyah exists in Oman.,30
+Davas,Horse,28.9172,50.823,334,Exact-name match in Bushehr Peninsula.,30
+Diftah,Horse,25.27226,56.18353,619,Exact-name match in Ham Wadi / Naqbiyin entries.,20
+Dubai,Horse,25.0,55.33333,Unclear,Matched to Dibai town record in Zenodo; coordinate is dataset's gazetteer point.,45
+Fara',Horse,25.4143,56.09123,619,Selected Ham Wadi-area match; same name occurs in other regions.,40
+Gharifah,Horse,24.99525,55.85787,1695,Matched to Gharif; spelling differs from the extracted name.,10
+Jamrah (Bani),Horse,26.20972,50.45972,221,Matched to Bani Jamrah in Bahrain entries.,25
+Jannūsān,Horse,26.23056,50.49472,221,Exact-name match; Bahrain Island.,15
+Janābiyah,Horse,26.19,50.46778,221,Exact-name match; Bahrain Island.,8
+Jasrah,Horse,26.16472,50.44722,221,Selected Bahrain Island match; another nearby coordinate record exists.,9
+Jau,Horse,25.99861,50.61667,221,Selected Bahrain Island match based on neighboring entries; same name occurs elsewhere.,8
+Rifa'-ash-Sharqi,Horse,26.12389,50.57361,Unclear,Selected Bahrain Island match; another close coordinate record exists.,16
+Bidyah,Sheep,25.43227,56.34574,Unclear,Selected Sharqiyin/Fujairah-area match; another Bidyah exists in Oman.,200
+Davas,Sheep,28.9172,50.823,334,Exact-name match in Bushehr Peninsula.,20
+Diftah,Sheep,25.27226,56.18353,619,Exact-name match in Ham Wadi / Naqbiyin entries.,30
+Fara',Sheep,25.4143,56.09123,619,Selected Ham Wadi-area match; same name occurs in other regions.,20
+Gharifah,Sheep,24.99525,55.85787,1695,Matched to Gharif; spelling differs from the extracted name.,100
+Jannūsān,Sheep,26.23056,50.49472,221,Exact-name match; Bahrain Island.,5
+Jasrah,Sheep,26.16472,50.44722,221,Selected Bahrain Island match; another nearby coordinate record exists.,2
+Jau,Sheep,25.99861,50.61667,221,Selected Bahrain Island match based on neighboring entries; same name occurs elsewhere.,25
+Khalaibiyah,Sheep,25.38124,56.17358,619,Exact-name match in nearby regional entries.,30
+Lusail,Sheep,25.4908,51.48439,Unclear,Exact-name match in Qatar entries.,20
+Masafi,Sheep,25.30129,56.16531,619,Exact-name match.,850
