@@ -14,7 +14,7 @@ Exploring Animals from The Lormier’s Gazetteer Using Spatial Data
 
 The Lorimer’s Gazetteer (Vol.2) is a historical reference book written by J. G. Lorimer, a British official, in the early 1900s, demonstrated an inventory of resources, tribes, and geography. Also, the Lorimer’s Gazetteer provides a large variety of information based on the Gulf during a set period of time. From descriptions of regions, natural resources, population data, houses, and animals, we had a lot to choose from. However, we finally decided on exploring animals in the Gulf, specifically the Trucial States, which included the Emirates we know today, Bahrain, and Oman. These animals included but were not limited to camels, donkeys, cattle, horses, sheep, and goats.
 
-Below is the map that shows the livestock, and amount of them in each place:
+Below is the map that shows the livestock, and amount of animals in each place:
 
 <iframe
   src="{{ '/assets/maps/Trucial States Animals.html' | relative_url }}"
