@@ -37,9 +37,24 @@ Further into the assignment, we created the prompt with the assistance of ChatGP
 
 [Download the dataset (CSV)]({{ '/assets/lorimer.csv' | relative_url }})
 
+Moreover, what mainly helped us was “engineering” through experimental prompting. What facilitated our process was providing ChatGPT with the context of the assignment, requirements, and specific instructions. From that, we adjusted each new prompt based on issues we noticed from the previous one. For instance, Finally, the screen shots we collected were compiled in one Google Doc. From there, sending it to ChatGPT with our adjusted prompt became a simple step. The reason why we decided to put all the screen captures in one file is to ensure that the LLM does not hallucinate sources of unrelated information. 
+
 ![gemini](../assets/images/gemini.png)
 
 Each two pictures were sent to the AI so that it would be easier for it to understand and analyze it, but with the recent technological advances, LLM’s are probably now able to analyze a high amount of data without it hallucinating or getting something wrong. It was the safer option to send images two by two though, so that it would be guaranteed that the AI will analyze it accurately.  
+
+During the data extraction process, we faced issues of unstructured information scattered in tables. At first, we kept in mind the possibility of the AI extracting the wrong data or hallucinating information, so we would double check if the data in the spreadsheet was accurate and neat. Yet, we came to recognize a separate issue: in Lormier’s Gazetteer, animal species were sometimes grouped together, making AI confuse classifying sheep and cattle, combining them together. This relates to Karl W. Broman and Kara H. Woo’s claim in Data Organization in Spreadsheets. They state: “The cells in your spreadsheet should each contain one piece of data.” This idea stems from the importance of keeping data consistent and organized so that it can be easily processed and analyzed. In our case, the merging of differing animal species affected the count, therefore presenting an inaccurate map. Consequently, we realized the significance of an orderly data set because of the ways in which it affected our map execution in Kepler. 
+
+While mapping our data, we noticed most animals recorded were on the upper side of the Trucial States, including Dubai and Fujaiarah. Most fascinating, though, was the large cluster of
+
+If we were to do this again using many more pages, we believe the data would be harder to organize. With the amount of information, mistakes would appear more frequently. Additionally, it would take much more effort to prompt an LLM to extract that much data, if it is even possible. Nevertheless, if we successfully accomplish that first step, we suspect our map to have much more clusters
+
+![mapping](../assets/images/mapping.png)
+
+Exploring Lorimer’s Gazetteer was interesting because of its connection to the Gulf and the Trucial States. Beyond that, we believe investigating outside topics would be intriguing. Topics such as street cats worldwide, locations where films are made. On the other hand, a topic of interest would be mapping Reddit stories based on topic or comments. For example, we could extract data from the Am I The Asshole? (AITA) subreddit, and scan for comments suggesting the verdict of the OP: NTA, YTA, idk.. Similarly, we could gain access to Buzzfeed quizzes such as ‘What Character Am I?’ or ‘Am I a psychopath?’ Based on the location of the user when they completed the assessment, we could map characters or autism tests. 
+
+Overall, we learned that a lot can come from mapping out animals in the Lorimier’s Gazetteer, as we found out how every single detail possible can pose great importance when it comes to the economy or the environment. Trade plays a role in making livestock extremely important for people, especially in the older generations, since animals were essential for farming, to signify social status, and the main food source for many. The reason why it indicates a high social status is due to the amount of animals, the more animals they had the more “perfect” their farm was.  
+
 
 
 
