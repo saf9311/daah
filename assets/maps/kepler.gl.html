@@ -1,0 +1,558 @@
+
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="UTF-8"/>
+        <title>kepler.gl embedded map</title>
+
+        <!--Uber Font-->
+        <link rel="stylesheet" href="https://d1a3f4spazzrp4.cloudfront.net/kepler.gl/uber-fonts/4.0.0/superfine.css">
+
+        <!--Kepler css-->
+        <link href="https://unpkg.com/kepler.gl@3.3.0-alpha.29/umd/keplergl.min.css" rel="stylesheet">
+
+        <!--MapBox css-->
+        <link href="https://api.tiles.mapbox.com/mapbox-gl-js/v1.1.1/mapbox-gl.css" rel="stylesheet">
+        <link href="https://unpkg.com/maplibre-gl@^3/dist/maplibre-gl.css" rel="stylesheet">
+
+        <!-— facebook open graph tags -->
+        <meta property="og:url" content="http://kepler.gl/" />
+        <meta property="og:title" content="Large-scale WebGL-powered Geospatial Data Visualization Tool" />
+        <meta property="og:description" content="Kepler.gl is a powerful web-based geospatial data analysis tool. Built on a high performance rendering engine and designed for large-scale data sets." />
+        <meta property="og:site_name" content="kepler.gl" />
+        <meta property="og:image" content="https://d1a3f4spazzrp4.cloudfront.net/kepler.gl/kepler.gl-meta-tag.png" />
+        <meta property="og:image:type" content="image/png" />
+        <meta property="og:image:width" content="800" />
+        <meta property="og:image:height" content="800" />
+
+        <!-— twitter card tags -->
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:site" content="@openjsf">
+        <meta name="twitter:creator" content="@openjsf">
+        <meta name="twitter:title" content="Large-scale WebGL-powered Geospatial Data Visualization Tool">
+        <meta name="twitter:description" content="Kepler.gl is a powerful web-based geospatial data analysis tool. Built on a high performance rendering engine and designed for large-scale data sets.">
+        <meta name="twitter:image" content="https://d1a3f4spazzrp4.cloudfront.net/kepler.gl/kepler.gl-meta-tag.png" />
+
+        <!--
+          Load React/Redux and the other UMD peer dependencies as ES modules.
+          React >= 19 no longer ships UMD builds, so we pull everything from an
+          ESM CDN (esm.sh) and re-expose them on window as the globals that the
+          kepler.gl UMD bundle (and the inline scripts below) expect.
+
+          IMPORTANT: this file must keep working as a standalone file, i.e. opened
+          directly from disk via the file:// protocol. Native ES module scripts
+          are always fetched with CORS semantics and a file:// document has an
+          opaque (null) origin, so the browser refuses to load native modules or
+          import maps locally. To keep the standalone-file behaviour we run
+          es-module-shims in "shim mode" (importmap-shim / module-shim tags): it
+          is a classic script (loads fine from file://) that resolves the import
+          map and executes the modules as blob: URLs, sidestepping that
+          restriction. The import map pins a single React instance and uses
+          external= so react-redux / styled-components reuse it (otherwise React
+          hooks break).
+        -->
+        <script>
+          // Trigger es-module-shims "shim mode" so it always parses the
+          // importmap-shim / module-shim tags below instead of deferring to the
+          // native loader (which fails under file://).
+          window.esmsInitOptions = {shimMode: true};
+        </script>
+        <script>
+          // Replace the loading overlay with an error message.
+          // Safe to call at any time — once React has mounted and removed
+          // #kepler-load-screen this becomes a no-op.
+          window._keplerShowLoadError = function(msg) {
+            var loadScreen = document.getElementById('kepler-load-screen');
+            if (!loadScreen) return;
+            var spinner = loadScreen.querySelector('.kepler-spinner');
+            var label = loadScreen.querySelector('.kepler-load-label');
+            if (spinner) spinner.style.display = 'none';
+            if (label) label.style.display = 'none';
+            var errEl = document.createElement('div');
+            errEl.className = 'kepler-load-error';
+            errEl.textContent = msg || 'Failed to load the map. Check your internet connection and reload the page.';
+            loadScreen.appendChild(errEl);
+          };
+          // Catch unhandled promise rejections (e.g. ES module imports failing
+          // inside the module-shim script before loadScript is ever called).
+          window.addEventListener('unhandledrejection', function(event) {
+            console.error('kepler.gl: unhandled rejection during map load', event.reason);
+            window._keplerShowLoadError('Failed to load the map. Check your internet connection and reload the page.');
+          });
+        </script>
+        <script src="https://unpkg.com/es-module-shims@2.8.1/dist/es-module-shims.js" crossorigin="anonymous"></script>
+        
+        <script type="importmap-shim">
+          {
+            "imports": {
+              "react": "https://esm.sh/react@19.1.0",
+              "react/jsx-runtime": "https://esm.sh/react@19.1.0/jsx-runtime",
+              "react-dom": "https://esm.sh/react-dom@19.1.0?external=react",
+              "react-dom/client": "https://esm.sh/react-dom@19.1.0/client?external=react",
+              "redux": "https://esm.sh/redux@5.0.1",
+              "react-redux": "https://esm.sh/react-redux@9.3.0?external=react,react-dom,redux",
+              "styled-components": "https://esm.sh/styled-components@6.1.19?external=react,react-dom"
+            }
+          }
+        </script>
+
+        <!--
+          Expose the ES modules as globals for the UMD kepler.gl bundle, then load
+          the kepler.gl UMD script and the app bootstrap script only after those
+          globals are available. The kepler.gl UMD bundle is a classic script
+          (which loads fine from file://), so it is injected dynamically here once
+          the globals are in place to guarantee the correct ordering.
+        -->
+        <script type="module-shim">
+          import * as React from 'react';
+          import * as ReactDOM from 'react-dom';
+          import * as ReactDOMClient from 'react-dom/client';
+          import * as Redux from 'redux';
+          import * as ReactRedux from 'react-redux';
+          import * as StyledComponents from 'styled-components';
+
+          // esm.sh namespaces expose the module's default export under .default.
+          // Normalize so the globals match the shape the React 18 UMD builds had:
+          // - React / Redux / ReactRedux keep their full namespace (named exports).
+          // - ReactDOM merges the classic + client entry so both createPortal and
+          //   createRoot are available (createRoot moved to react-dom/client in v19).
+          // - styled-components' global must be the callable default (styled) with
+          //   its named exports (ThemeProvider, withTheme, css, keyframes, ...)
+          //   attached, since the kepler.gl bundle relies on both.
+          window.React = React.default || React;
+          window.ReactDOM = Object.assign({}, ReactDOM.default || ReactDOM, ReactDOMClient);
+          window.Redux = Redux.default || Redux;
+          window.ReactRedux = ReactRedux.default || ReactRedux;
+          window.styled = Object.assign(StyledComponents.default, StyledComponents);
+
+          function loadScript(src) {
+            return new Promise(function(resolve, reject) {
+              var script = document.createElement('script');
+              script.src = src;
+              script.crossOrigin = 'anonymous';
+              script.onload = resolve;
+              script.onerror = reject;
+              document.head.appendChild(script);
+            });
+          }
+
+          // Load the kepler.gl UMD bundle after the globals are in place, then run
+          // the app bootstrap scripts (marked as type="text/kepler-bootstrap").
+          loadScript("https://unpkg.com/kepler.gl@3.3.0-alpha.29/umd/keplergl.min.js")
+            .then(function() {
+              var bootstraps = document.querySelectorAll('script[type="text/kepler-bootstrap"]');
+              bootstraps.forEach(function(node) {
+                var script = document.createElement('script');
+                script.text = node.textContent;
+                document.body.appendChild(script);
+              });
+            })
+            .catch(function(error) {
+              console.error('kepler.gl: failed to load UMD bundle', error);
+              window._keplerShowLoadError('Failed to load the map bundle. Check your internet connection and reload the page.');
+            });
+        </script>
+        <style type="text/css">
+          body {margin: 0; padding: 0; overflow: hidden;}
+          #kepler-load-screen {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #29323c;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            z-index: 9999;
+            font-family: ff-clan-web-pro, 'Helvetica Neue', Helvetica, sans-serif;
+            color: #a0a7b4;
+          }
+          #kepler-load-screen .kepler-spinner {
+            width: 48px; height: 48px;
+            border: 4px solid rgba(255,255,255,0.08);
+            border-top-color: #1fbad6;
+            border-radius: 50%;
+            animation: kepler-spin 0.8s linear infinite;
+          }
+          #kepler-load-screen .kepler-load-label {
+            font-size: 13px;
+            letter-spacing: 0.5px;
+          }
+          #kepler-load-screen .kepler-load-error {
+            font-size: 13px;
+            color: #f05e45;
+            max-width: 360px;
+            text-align: center;
+            line-height: 1.5;
+          }
+          @keyframes kepler-spin { to { transform: rotate(360deg); } }
+        </style>
+
+        <!--MapBox token-->
+        <!--
+          SECURITY NOTE: Your Mapbox access token is embedded below in plain text.
+          Anyone with access to this HTML file can see and use this token.
+          Consider using a scoped token with URL restrictions to limit misuse.
+          See: https://docs.mapbox.com/accounts/guides/tokens/#url-restrictions
+        -->
+        <script>
+          /**
+           * Provide your MapBox Token
+           **/
+          window.MAPBOX_TOKEN = "";
+          window.WARNING_MESSAGE = 'No Mapbox token provided. Mapbox basemaps will not be available. To enable them, edit this file and set MAPBOX_TOKEN to your Mapbox access key.';
+        </script>
+      </head>
+      <body>
+        <!-- We will put our React component inside this div. -->
+        <div id="app">
+          <div id="kepler-load-screen">
+            <div class="kepler-spinner"></div>
+            <div class="kepler-load-label">Loading map…</div>
+          </div>
+        </div>
+
+        <!--
+          Load our React component. This script is not executed inline: it is run
+          by the module shim in <head> once the kepler.gl UMD bundle (and its
+          global peer dependencies) have finished loading.
+        -->
+        <script type="text/kepler-bootstrap">
+          /* Validate Mapbox Token */
+          if ((MAPBOX_TOKEN || '') === '' || MAPBOX_TOKEN === 'PROVIDE_MAPBOX_TOKEN') {
+            console.warn('[kepler.gl]', WARNING_MESSAGE);
+          }
+
+          const branding = {"appName":"kepler.gl","appWebsite":"http://kepler.gl/","appIcon":null,"appNameColor":"#1FBAD6"};
+
+          /** STORE **/
+          // Pre-seed styleType so the correct basemap fetch starts on the very
+          // first render, avoiding a flash of the default dark basemap.
+          // options.config has the versioned envelope shape: { version, config: { mapStyle, ... } }
+          const savedStyleType = "dark-matter";
+
+          const reducers = (function createReducers(redux, keplerGl, styleType) {
+            return redux.combineReducers({
+              // mount keplerGl reducer
+              keplerGl: keplerGl.keplerGlReducer.initialState({
+                uiState: {
+                  readOnly: true,
+                  currentModal: null,
+                  exportMap: Object.assign({}, keplerGl.INITIAL_UI_STATE.exportMap, branding)
+                },
+                ...(styleType ? {mapStyle: {styleType}} : {})
+              })
+            });
+          }(Redux, KeplerGl, savedStyleType));
+
+          const middleWares = (function createMiddlewares(keplerGl) {
+            return keplerGl.enhanceReduxMiddleware([
+              // Add other middlewares here
+            ]);
+          }(KeplerGl));
+
+          const enhancers = (function craeteEnhancers(redux, middles) {
+            return redux.applyMiddleware(...middles);
+          }(Redux, middleWares));
+
+          const store = (function createStore(redux, enhancers) {
+            return redux.createStore(
+              reducers,
+              {},
+              redux.compose(enhancers)
+            );
+          }(Redux, enhancers));
+          /** END STORE **/
+
+          /** COMPONENTS **/
+          var BrandLogo = (function createBrandLogo(react, branding) {
+            return function BrandLogo(props) {
+              var fixed = Boolean(props && props.fixed);
+              var icon = branding.appIcon
+                ? react.createElement("img", {
+                    src: branding.appIcon,
+                    alt: "",
+                    "aria-hidden": true,
+                    style: {width: "22px", height: "15px", objectFit: "contain"}
+                  })
+                : react.createElement(
+                    "svg",
+                    {width: "22px", height: "15px", viewBox: "0 0 22 15", "aria-hidden": true},
+                    react.createElement(
+                      "g",
+                      {transform: "translate(11, -3) rotate(45.000000)"},
+                      react.createElement("rect", {fill: "#535C6C", x: "0", y: "5", width: "10", height: "10"}),
+                      react.createElement("rect", {fill: "#1FBAD6", x: "5", y: "0", width: "10", height: "10"})
+                    )
+                  );
+
+              return react.createElement(
+                "div",
+                {
+                  className: fixed ? "logo-container" : "side-panel-logo",
+                  style: fixed
+                    ? {position: "fixed", zIndex: 10000, padding: "4px", display: "flex", alignItems: "center"}
+                    : {display: "flex", alignItems: "flex-start"}
+                },
+                react.createElement(
+                  "div",
+                  {style: {marginTop: fixed ? 0 : "3px"}},
+                  icon
+                ),
+                react.createElement(
+                  "div",
+                  {className: "logo__title", style: {marginLeft: "6px"}},
+                  react.createElement(
+                    "a",
+                    {
+                      className: "kepler_gl__logo logo__link",
+                      href: branding.appWebsite,
+                      target: "_blank",
+                      rel: "noopener noreferrer",
+                      style: {
+                        color: branding.appNameColor,
+                        fontFamily: "ff-clan-web-pro, 'Helvetica Neue', Helvetica, sans-serif",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        letterSpacing: "1.17px",
+                        textDecoration: "none"
+                      }
+                    },
+                    react.createElement("span", {style: {color: branding.appNameColor}}, branding.appName)
+                  ),
+                  !fixed && props && props.version
+                    ? react.createElement(
+                        "div",
+                        {
+                          className: "logo__version",
+                          style: {fontSize: "10px", color: "#a0a7b4", letterSpacing: "0.83px", lineHeight: "14px"}
+                        },
+                        props.version
+                      )
+                    : null
+                )
+              );
+            };
+          }(React, branding));
+
+          /** Custom map control factory to restore export editing and chart display. **/
+          var CustomMapControlFactory = (function createCustomMapControl(react, keplerGl) {
+            var EffectControlFactory = keplerGl.EffectControlFactory;
+            var EffectManagerFactory = keplerGl.EffectManagerFactory;
+            var AnnotationControlFactory = keplerGl.AnnotationControlFactory;
+            var AnnotationManagerFactory = keplerGl.AnnotationManagerFactory;
+            var ChartControlFactory = keplerGl.ChartControlFactory;
+            var ChartManagerFactory = keplerGl.ChartManagerFactory;
+            var MapControlFactory = keplerGl.MapControlFactory;
+
+            if (
+              !EffectControlFactory ||
+              !EffectManagerFactory ||
+              !AnnotationControlFactory ||
+              !AnnotationManagerFactory ||
+              !ChartControlFactory ||
+              !ChartManagerFactory ||
+              !MapControlFactory
+            ) {
+              console.warn('kepler.gl: Export control factories not available, skipping control injection');
+              return null;
+            }
+
+            function ExportMapControlFactory(
+              EffectControl,
+              EffectManager,
+              AnnotationControl,
+              AnnotationManager,
+              ChartControl,
+              ChartManager
+            ) {
+              var args = Array.prototype.slice.call(arguments, 6);
+              var MapControl = MapControlFactory.apply(null, args);
+              var defaultActionComponents = MapControl.defaultActionComponents || [];
+
+              var ExportMapControl = function ExportMapControl(props) {
+                var readOnly = Boolean(props.readOnly);
+                var mapControls = props.mapControls || {};
+                var charts = props.charts || [];
+                var actionComponents = defaultActionComponents.filter(function(ActionComponent) {
+                  return !readOnly || ActionComponent !== AnnotationControl;
+                });
+                if (!readOnly) {
+                  actionComponents = actionComponents.concat([ChartControl, EffectControl]);
+                }
+                var showEffects = !readOnly && Boolean(mapControls.effect && mapControls.effect.active);
+                var showAnnotations = !readOnly && Boolean(mapControls.annotation && mapControls.annotation.active);
+                var showChartPanel = !readOnly && Boolean(mapControls.chart && mapControls.chart.active);
+                var hasPinnedCharts = charts.some(function(chart) { return chart.pinned !== false; });
+                var showCharts = readOnly ? charts.length > 0 : showChartPanel || hasPinnedCharts;
+                var rightPanelVisible = showEffects || showAnnotations || showCharts;
+                return react.createElement(
+                  'div',
+                  {style: {
+                    position: 'absolute',
+                    display: 'flex',
+                    top: (props.top || 0) + 'px',
+                    right: 0,
+                    zIndex: 1,
+                    maxHeight: '100%',
+                    pointerEvents: 'none'
+                  }},
+                  react.createElement(
+                    'div',
+                    {style: {position: 'relative', pointerEvents: 'all'}},
+                    react.createElement(MapControl, Object.assign({}, props, {top: 0, actionComponents: actionComponents}))
+                  ),
+                  rightPanelVisible
+                    ? react.createElement('div', {
+                        style: {
+                          maxHeight: '100%',
+                          overflow: 'hidden',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          pointerEvents: 'all',
+                          marginTop: '10px'
+                        }
+                      },
+                      showAnnotations ? react.createElement(AnnotationManager, null) : null,
+                      showCharts ? react.createElement(ChartManager, {
+                        panelActive: showChartPanel,
+                        isExport: readOnly
+                      }) : null,
+                      showEffects ? react.createElement(EffectManager, null) : null
+                      )
+                    : null
+                );
+              };
+
+              return ExportMapControl;
+            }
+            ExportMapControlFactory.deps = [
+              EffectControlFactory,
+              EffectManagerFactory,
+              AnnotationControlFactory,
+              AnnotationManagerFactory,
+              ChartControlFactory,
+              ChartManagerFactory
+            ].concat(MapControlFactory.deps);
+
+            return [MapControlFactory, ExportMapControlFactory];
+          }(React, KeplerGl));
+
+          var CustomPanelHeaderFactory = (function createCustomPanelHeader(react, keplerGl, BrandLogo) {
+            var PanelHeaderFactory = keplerGl.PanelHeaderFactory;
+            if (!PanelHeaderFactory) {
+              console.warn('kepler.gl: Panel header factory not available, skipping branding injection');
+              return null;
+            }
+
+            function ExportPanelHeaderFactory() {
+              var PanelHeader = PanelHeaderFactory.apply(null, arguments);
+              return function ExportPanelHeader(props) {
+                return react.createElement(
+                  PanelHeader,
+                  Object.assign({}, props, {logoComponent: BrandLogo})
+                );
+              };
+            }
+            ExportPanelHeaderFactory.deps = PanelHeaderFactory.deps;
+            return [PanelHeaderFactory, ExportPanelHeaderFactory];
+          }(React, KeplerGl, BrandLogo));
+
+          var CustomFactories = [CustomMapControlFactory, CustomPanelHeaderFactory].filter(Boolean);
+          var KeplerGlComponent = CustomFactories.length
+            ? KeplerGl.injectComponents(CustomFactories)
+            : KeplerGl.KeplerGl;
+
+          var KeplerElement = (function makeKeplerElement(react, keplerGl, mapboxToken, branding, BrandLogo) {
+            return function App() {
+              var rootElm = react.useRef(null);
+              var _useState = react.useState({
+                width: window.innerWidth,
+                height: window.innerHeight
+              });
+              var windowDimension = _useState[0];
+              var setDimension = _useState[1];
+              react.useEffect(function sideEffect(){
+                function handleResize() {
+                  setDimension({width: window.innerWidth, height: window.innerHeight});
+                };
+                window.addEventListener('resize', handleResize);
+                return function() {window.removeEventListener('resize', handleResize);};
+              }, []);
+              // Remove the loading overlay after the first render is painted.
+              // useEffect fires post-commit, so this is safe under React 19's
+              // concurrent renderer — the map is visible before the overlay goes away.
+              react.useEffect(function removeLoadScreen() {
+                var loadScreen = document.getElementById('kepler-load-screen');
+                if (loadScreen) loadScreen.remove();
+              }, []);
+              return react.createElement(
+                'div',
+                {style: {position: 'absolute', left: 0, width: '100vw', height: '100vh'}},
+                react.createElement(BrandLogo, {fixed: true}),
+                react.createElement(KeplerGlComponent, {
+                  mapboxApiAccessToken: mapboxToken,
+                  id: "map",
+                  width: windowDimension.width,
+                  height: windowDimension.height,
+                  appName: branding.appName,
+                  appWebsite: branding.appWebsite
+                })
+              )
+            }
+          }(React, KeplerGl, MAPBOX_TOKEN, branding, BrandLogo));
+
+          const app = (function createReactReduxProvider(react, reactRedux, KeplerElement) {
+            return react.createElement(
+              reactRedux.Provider,
+              {store},
+              react.createElement(KeplerElement, null)
+            )
+          }(React, ReactRedux, KeplerElement));
+          /** END COMPONENTS **/
+
+          /** Render **/
+          (function render(react, reactDOM, app) {
+            const container = document.getElementById('app');
+            const root = reactDOM.createRoot(container);
+            root.render(app);
+          }(React, ReactDOM, app));
+
+          /**
+           * Customize map.
+           * In the following section you can use the store object to dispatch Kepler.gl actions
+           * to add new data and customize behavior
+           */
+          (function customize(keplerGl, store) {
+            const datasets = [{"version":"v1","data":{"id":"-bon5te","label":"lorimer_animals_combined_kepler (1).csv","color":[143,47,191],"allData":[["'Aishmah","Not specified in first dataset",null,null,"Camel",20,618,"Carried forward from the original Kepler dataset.","No reliable exact-name coordinate match.","First Kepler file"],["'Aishmah","Not specified in first dataset",null,null,"Cattle",40,618,"Carried forward from the original Kepler dataset.","No reliable exact-name coordinate match.","First Kepler file"],["'Aishmah","Not specified in first dataset",null,null,"Donkey",40,618,"Carried forward from the original Kepler dataset.","No reliable exact-name coordinate match.","First Kepler file"],["'Ajman","Ajman",25.40177,55.47878,"Camel",60,53,"Source wording: 'some 60 camels, 20 horses, 100 donkeys, 100 cattle and 400 goats'.","Selected Ajman town coordinate record; alternate coordinate record exists.","Both datasets"],["'Ajman","Ajman",25.40177,55.47878,"Cattle",100,53,"Source wording: 'some 60 camels, 20 horses, 100 donkeys, 100 cattle and 400 goats'.","Selected Ajman town coordinate record; alternate coordinate record exists.","Both datasets"],["'Ajman","Ajman",25.40177,55.47878,"Donkey",100,53,"Source wording: 'some 60 camels, 20 horses, 100 donkeys, 100 cattle and 400 goats'.","Selected Ajman town coordinate record; alternate coordinate record exists.","Both datasets"],["'Ajman","Ajman",25.40177,55.47878,"Goat",400,53,"Source wording: 'some 60 camels, 20 horses, 100 donkeys, 100 cattle and 400 goats'.","Selected Ajman town coordinate record; alternate coordinate record exists.","Both datasets"],["'Ajman","Ajman",25.40177,55.47878,"Horse",20,53,"Source wording: 'some 60 camels, 20 horses, 100 donkeys, 100 cattle and 400 goats'.","Selected Ajman town coordinate record; alternate coordinate record exists.","Both datasets"],["Ain-ad-Dar","Bahrain",26.21667,50.53333,"Cattle",2,217,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Ain-ad-Dar","Bahrain",26.21667,50.53333,"Donkey",7,217,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Ali","Bahrain",null,null,"Cattle",10,null,"Bahrain Island village; source reports 35 donkeys and 10 cattle.","No reliable coordinate match; left blank.","Expanded extraction"],["Ali","Bahrain",null,null,"Donkey",35,null,"Bahrain Island village; source reports 35 donkeys and 10 cattle.","No reliable coordinate match; left blank.","Expanded extraction"],["Anas (Halat Bin-)","Bahrain",26.23333,50.6,"Donkey",7,217,null,"Exact-name match in Bahrain Principality entries.","Expanded extraction"],["Aqur","Bahrain",26.14306,50.61028,"Cattle",5,217,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Aqur","Bahrain",26.14306,50.61028,"Donkey",8,217,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Asimah","Wadi Ham",25.39831,56.15073,"Camel",20,618,"Source reports 400 sheep and goats together.","Exact-name match in Ham Wadi entries.","Expanded extraction"],["Asimah","Wadi Ham",25.39831,56.15073,"Cattle",40,618,"Source reports 400 sheep and goats together.","Exact-name match in Ham Wadi entries.","Expanded extraction"],["Asimah","Wadi Ham",25.39831,56.15073,"Donkey",40,618,"Source reports 400 sheep and goats together.","Exact-name match in Ham Wadi entries.","Expanded extraction"],["Asimah","Wadi Ham",25.39831,56.15073,"Sheep and Goats",400,618,"Source reports 400 sheep and goats together.","Exact-name match in Ham Wadi entries.","Expanded extraction"],["Askar","Bahrain",26.05722,50.61639,"Cattle",16,217,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Askar","Bahrain",26.05722,50.61639,"Donkey",6,217,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Baham (Abu)","Bahrain",26.2075,50.54417,"Cattle",2,218,null,"Matched to Bahām in Bahrain Island entries.","Expanded extraction"],["Baham (Abu)","Bahrain",26.2075,50.54417,"Donkey",7,218,null,"Matched to Bahām in Bahrain Island entries.","Expanded extraction"],["Bajairiyah","Trucial Oman",null,null,"Donkey",10,17,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Bajairiyah","Trucial Oman",null,null,"Horse",10,17,null,"No reliable coordinate match; left blank.","First Kepler file"],["Bajairiyah","Trucial Oman",null,null,"Sheep and Goats",20,17,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Bajawiyah","Bahrain",26.21667,50.55,"Cattle",1,218,null,"Matched to Baijawiyah in Bahrain Island entries.","Expanded extraction"],["Bajawiyah","Bahrain",26.21667,50.55,"Donkey",9,218,null,"Matched to Baijawiyah in Bahrain Island entries.","Expanded extraction"],["Barbar","Bahrain",26.22944,50.48083,"Cattle",8,218,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Barbar","Bahrain",26.22944,50.48083,"Donkey",19,218,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Barbarah","Bahrain",26.13333,50.58333,"Cattle",2,218,null,"Matched to Barbūrah in Bahrain Island entries.","Expanded extraction"],["Barbarah","Bahrain",26.13333,50.58333,"Donkey",16,218,null,"Matched to Barbūrah in Bahrain Island entries.","Expanded extraction"],["Bari","Bahrain",26.15139,50.4975,"Cattle",13,219,null,"Matched to Būri in Bahrain Island entries.","Expanded extraction"],["Bari","Bahrain",26.15139,50.4975,"Donkey",17,219,null,"Matched to Būri in Bahrain Island entries.","Expanded extraction"],["Bidyah","Trucial Oman",25.43227,56.34574,"Camel",15,null,"Livestock figures are described as estimates; sheep and goats are reported together. Earlier first-file count: 15 cattle (p. Unclear); expanded extraction count: 200. Expanded extraction value retained.","Selected Sharqiyin/Fujairah-area match; another Bidyah exists in Oman.","Expanded extraction"],["Bidyah","Trucial Oman",25.43227,56.34574,"Cattle",200,null,"Livestock figures are described as estimates; sheep and goats are reported together. Earlier first-file count: 15 cattle (p. Unclear); expanded extraction count: 200. Expanded extraction value retained.","Selected Sharqiyin/Fujairah-area match; another Bidyah exists in Oman.","Expanded extraction (count conflict noted)"],["Bidyah","Trucial Oman",25.43227,56.34574,"Donkey",30,null,"Livestock figures are described as estimates; sheep and goats are reported together. Earlier first-file count: 15 cattle (p. Unclear); expanded extraction count: 200. Expanded extraction value retained.","Selected Sharqiyin/Fujairah-area match; another Bidyah exists in Oman.","Expanded extraction"],["Bidyah","Trucial Oman",25.43227,56.34574,"Horse",30,null,"Livestock figures are described as estimates; sheep and goats are reported together. Earlier first-file count: 15 cattle (p. Unclear); expanded extraction count: 200. Expanded extraction value retained.","Selected Sharqiyin/Fujairah-area match; another Bidyah exists in Oman.","First Kepler file"],["Bidyah","Trucial Oman",25.43227,56.34574,"Sheep",200,null,"Livestock figures are described as estimates; sheep and goats are reported together. Earlier first-file count: 15 cattle (p. Unclear); expanded extraction count: 200. Expanded extraction value retained.","Selected Sharqiyin/Fujairah-area match; another Bidyah exists in Oman.","First Kepler file"],["Bidyah","Trucial Oman",25.43227,56.34574,"Sheep and Goats",100,null,"Livestock figures are described as estimates; sheep and goats are reported together. Earlier first-file count: 15 cattle (p. Unclear); expanded extraction count: 200. Expanded extraction value retained.","Selected Sharqiyin/Fujairah-area match; another Bidyah exists in Oman.","Expanded extraction"],["Bihdih","Persian Coast / Asuh Darveh",27.108,53.3682,"Camel",80,179,"Source reports 8,000 sheep and goats together.","Exact-name match in Asuh Darveh.","Both datasets"],["Bihdih","Persian Coast / Asuh Darveh",27.108,53.3682,"Cattle",230,179,"Source reports 8,000 sheep and goats together.","Exact-name match in Asuh Darveh.","Both datasets"],["Bihdih","Persian Coast / Asuh Darveh",27.108,53.3682,"Donkey",200,179,"Source reports 8,000 sheep and goats together.","Exact-name match in Asuh Darveh.","Both datasets"],["Bihdih","Persian Coast / Asuh Darveh",27.108,53.3682,"Sheep and Goats",3000,179,"Source reports 8,000 sheep and goats together.","Exact-name match in Asuh Darveh.","Expanded extraction"],["Bithnah","Wadi Ham",25.18951,56.23516,"Camel",15,618,"Source describes the livestock figures as estimated resources; sheep and goats are combined.","Exact-name match.","Both datasets"],["Bithnah","Wadi Ham",25.18951,56.23516,"Cattle",20,618,"Source describes the livestock figures as estimated resources; sheep and goats are combined.","Exact-name match.","Both datasets"],["Bithnah","Wadi Ham",25.18951,56.23516,"Donkey",30,618,"Source describes the livestock figures as estimated resources; sheep and goats are combined.","Exact-name match.","Both datasets"],["Bithnah","Wadi Ham",25.18951,56.23516,"Sheep and Goats",600,618,"Source describes the livestock figures as estimated resources; sheep and goats are combined.","Exact-name match.","Expanded extraction"],["Bugawwab","Bahrain",null,null,"Cattle",6,218,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Bugawwab","Bahrain",null,null,"Donkey",55,218,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Bulkhair","Tangistan",28.53091,51.09609,"Cattle",40,1864,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Bulkhair","Tangistan",28.53091,51.09609,"Donkey",40,1864,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Bulkhair","Tangistan",28.53091,51.09609,"Sheep and Goats",200,1864,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Bunigaz","Tangistan",28.94646,51.11415,"Camel",100,1864,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Bunigaz","Tangistan",28.94646,51.11415,"Cattle",50,1864,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Bunigaz","Tangistan",28.94646,51.11415,"Donkey",150,1864,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Bunigaz","Tangistan",28.94646,51.11415,"Horse",8,1864,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Bunigaz","Tangistan",28.94646,51.11415,"Mule",2,1864,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Bunigaz","Tangistan",28.94646,51.11415,"Sheep and Goats",1000,1864,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Chaghadak","Tangistan",28.986,51.0364,"Horse",20,1864,"Source says 20 horses of the Bushehr artillery were kept here for grazing.","Exact-name match in Tangistan entries.","Expanded extraction"],["Chah Pir","Tangistan",28.99939,51.22058,"Cattle",40,1864,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Chah Pir","Tangistan",28.99939,51.22058,"Donkey",20,1864,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Chah Pir","Tangistan",28.99939,51.22058,"Horse",10,1864,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Chah Pir","Tangistan",28.99939,51.22058,"Mule",2,1864,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Chah Pir","Tangistan",28.99939,51.22058,"Sheep and Goats",800,1864,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Dabik","Badiyah",22.61177,58.80247,"Camel",20,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Dabik","Badiyah",22.61177,58.80247,"Cattle",160,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Dabik","Badiyah",22.61177,58.80247,"Donkey",30,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Dabik","Badiyah",22.61177,58.80247,"Sheep and Goats",1000,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Dair","Bahrain",26.28417,50.62361,"Cattle",13,361,null,"Selected Dair in Bahrain Principality entries; same name occurs in Iraq.","Both datasets"],["Dair","Bahrain",26.28417,50.62361,"Donkey",30,361,null,"Selected Dair in Bahrain Principality entries; same name occurs in Iraq.","Both datasets"],["Damistan","Bahrain",26.12639,50.48111,"Cattle",5,219,null,"Matched to Dumistān in Bahrain Island entries.","Expanded extraction"],["Damistan","Bahrain",26.12639,50.48111,"Donkey",17,219,null,"Matched to Dumistān in Bahrain Island entries.","Expanded extraction"],["Davas","Bushehr Peninsula",28.9172,50.823,"Cattle",20,334,"Earlier first-file count: 20 sheep (p. 334); expanded extraction count: 100. Expanded extraction value retained.","Exact-name match in Bushehr Peninsula.","Expanded extraction"],["Davas","Bushehr Peninsula",28.9172,50.823,"Donkey",30,334,"Earlier first-file count: 20 sheep (p. 334); expanded extraction count: 100. Expanded extraction value retained.","Exact-name match in Bushehr Peninsula.","Expanded extraction"],["Davas","Bushehr Peninsula",28.9172,50.823,"Horse",30,334,"Earlier first-file count: 20 sheep (p. 334); expanded extraction count: 100. Expanded extraction value retained.","Exact-name match in Bushehr Peninsula.","First Kepler file"],["Davas","Bushehr Peninsula",28.9172,50.823,"Sheep",100,334,"Earlier first-file count: 20 sheep (p. 334); expanded extraction count: 100. Expanded extraction value retained.","Exact-name match in Bushehr Peninsula.","Expanded extraction (count conflict noted)"],["Dhadnah","Sharqiyin / Trucial Oman",25.52422,56.35868,"Camel",3,1695,"Source gives 100 cattle and 100 sheep and goats; it mentions 'a few camels and donkeys' without exact counts.","Exact-name match in Sharqiyin/Shamailiyah entries.","First Kepler file"],["Dhadnah","Sharqiyin / Trucial Oman",25.52422,56.35868,"Cattle",100,1695,"Source gives 100 cattle and 100 sheep and goats; it mentions 'a few camels and donkeys' without exact counts.","Exact-name match in Sharqiyin/Shamailiyah entries.","Both datasets"],["Dhadnah","Sharqiyin / Trucial Oman",25.52422,56.35868,"Donkey",10,1695,"Source gives 100 cattle and 100 sheep and goats; it mentions 'a few camels and donkeys' without exact counts.","Exact-name match in Sharqiyin/Shamailiyah entries.","First Kepler file"],["Dhadnah","Sharqiyin / Trucial Oman",25.52422,56.35868,"Sheep and Goats",100,1695,"Source gives 100 cattle and 100 sheep and goats; it mentions 'a few camels and donkeys' without exact counts.","Exact-name match in Sharqiyin/Shamailiyah entries.","Expanded extraction"],["Diftah","Wadi Ham",25.27226,56.18353,"Cattle",80,619,"Source wording: 'about 20 donkeys, 80 cattle, 150 sheep and goats'; sheep and goats are combined.","Exact-name match.","Expanded extraction"],["Diftah","Wadi Ham",25.27226,56.18353,"Donkey",20,619,"Source wording: 'about 20 donkeys, 80 cattle, 150 sheep and goats'; sheep and goats are combined.","Exact-name match.","Expanded extraction"],["Diftah","Wadi Ham",25.27226,56.18353,"Horse",20,619,"Source wording: 'about 20 donkeys, 80 cattle, 150 sheep and goats'; sheep and goats are combined.","Exact-name match.","First Kepler file"],["Diftah","Wadi Ham",25.27226,56.18353,"Sheep",30,619,"Source wording: 'about 20 donkeys, 80 cattle, 150 sheep and goats'; sheep and goats are combined.","Exact-name match.","First Kepler file"],["Diftah","Wadi Ham",25.27226,56.18353,"Sheep and Goats",150,619,"Source wording: 'about 20 donkeys, 80 cattle, 150 sheep and goats'; sheep and goats are combined.","Exact-name match.","Expanded extraction"],["Dihbar and 'Amiri","Tangistan",null,null,"Camel",50,1864,"Lorimer treats Dihbar and 'Amiri as one combined village entry; the livestock counts apply to both together, so there is no single point coordinate.","No reliable coordinate match; left blank.","Expanded extraction"],["Dihbar and 'Amiri","Tangistan",null,null,"Cattle",50,1864,"Lorimer treats Dihbar and 'Amiri as one combined village entry; the livestock counts apply to both together, so there is no single point coordinate.","No reliable coordinate match; left blank.","Expanded extraction"],["Dihbar and 'Amiri","Tangistan",null,null,"Donkey",100,1864,"Lorimer treats Dihbar and 'Amiri as one combined village entry; the livestock counts apply to both together, so there is no single point coordinate.","No reliable coordinate match; left blank.","Expanded extraction"],["Dihbar and 'Amiri","Tangistan",null,null,"Horse",4,1864,"Lorimer treats Dihbar and 'Amiri as one combined village entry; the livestock counts apply to both together, so there is no single point coordinate.","No reliable coordinate match; left blank.","Expanded extraction"],["Dihbar and 'Amiri","Tangistan",null,null,"Mule",2,1864,"Lorimer treats Dihbar and 'Amiri as one combined village entry; the livestock counts apply to both together, so there is no single point coordinate.","No reliable coordinate match; left blank.","Expanded extraction"],["Dihbar and 'Amiri","Tangistan",null,null,"Sheep and Goats",1000,1864,"Lorimer treats Dihbar and 'Amiri as one combined village entry; the livestock counts apply to both together, so there is no single point coordinate.","No reliable coordinate match; left blank.","Expanded extraction"],["Diraz","Bahrain",26.21806,50.47056,"Cattle",12,219,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Diraz","Bahrain",26.21806,50.47056,"Donkey",30,219,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Dubai","Dubai",25,55.33333,"Camel",1650,455,"Source wording: 'Dibai town is reckoned to possess' 1,650 camels, 45 horses, 380 donkeys, 430 cattle and 960 goats.","Matched to Dibai town record in the gazetteer; alternate coordinate record exists.","Both datasets"],["Dubai","Dubai",25,55.33333,"Cattle",430,455,"Source wording: 'Dibai town is reckoned to possess' 1,650 camels, 45 horses, 380 donkeys, 430 cattle and 960 goats.","Matched to Dibai town record in the gazetteer; alternate coordinate record exists.","Both datasets"],["Dubai","Dubai",25,55.33333,"Donkey",380,455,"Source wording: 'Dibai town is reckoned to possess' 1,650 camels, 45 horses, 380 donkeys, 430 cattle and 960 goats.","Matched to Dibai town record in the gazetteer; alternate coordinate record exists.","Both datasets"],["Dubai","Dubai",25,55.33333,"Goat",960,455,"Source wording: 'Dibai town is reckoned to possess' 1,650 camels, 45 horses, 380 donkeys, 430 cattle and 960 goats.","Matched to Dibai town record in the gazetteer; alternate coordinate record exists.","Both datasets"],["Dubai","Dubai",25,55.33333,"Horse",45,455,"Source wording: 'Dibai town is reckoned to possess' 1,650 camels, 45 horses, 380 donkeys, 430 cattle and 960 goats.","Matched to Dibai town record in the gazetteer; alternate coordinate record exists.","Both datasets"],["Falah","Bahrain",null,null,"Cattle",2,219,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Falah","Bahrain",null,null,"Donkey",9,219,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Fara'","Wadi Ham",25.4143,56.09123,"Camel",10,619,"Source reports 250 sheep and goats together. Earlier first-file count: 10 cattle (p. 619); expanded extraction count: 20. Expanded extraction value retained.","Selected Ham Wadi-area match; same name occurs elsewhere.","Expanded extraction"],["Fara'","Wadi Ham",25.4143,56.09123,"Cattle",20,619,"Source reports 250 sheep and goats together. Earlier first-file count: 10 cattle (p. 619); expanded extraction count: 20. Expanded extraction value retained.","Selected Ham Wadi-area match; same name occurs elsewhere.","Expanded extraction (count conflict noted)"],["Fara'","Wadi Ham",25.4143,56.09123,"Donkey",40,619,"Source reports 250 sheep and goats together. Earlier first-file count: 10 cattle (p. 619); expanded extraction count: 20. Expanded extraction value retained.","Selected Ham Wadi-area match; same name occurs elsewhere.","Expanded extraction"],["Fara'","Wadi Ham",25.4143,56.09123,"Horse",40,619,"Source reports 250 sheep and goats together. Earlier first-file count: 10 cattle (p. 619); expanded extraction count: 20. Expanded extraction value retained.","Selected Ham Wadi-area match; same name occurs elsewhere.","First Kepler file"],["Fara'","Wadi Ham",25.4143,56.09123,"Sheep",20,619,"Source reports 250 sheep and goats together. Earlier first-file count: 10 cattle (p. 619); expanded extraction count: 20. Expanded extraction value retained.","Selected Ham Wadi-area match; same name occurs elsewhere.","First Kepler file"],["Fara'","Wadi Ham",25.4143,56.09123,"Sheep and Goats",250,619,"Source reports 250 sheep and goats together. Earlier first-file count: 10 cattle (p. 619); expanded extraction count: 20. Expanded extraction value retained.","Selected Ham Wadi-area match; same name occurs elsewhere.","Expanded extraction"],["Farsiyah","Bahrain",26.09417,50.62972,"Cattle",6,219,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Farsiyah","Bahrain",26.09417,50.62972,"Donkey",5,219,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Gahi","Tangistan",28.5462,51.0883,"Camel",5,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Gahi","Tangistan",28.5462,51.0883,"Donkey",10,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Gahi","Tangistan",28.5462,51.0883,"Sheep and Goats",100,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Gargur","Tangistan",28.8712,51.0472,"Camel",50,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Gargur","Tangistan",28.8712,51.0472,"Cattle",50,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Gargur","Tangistan",28.8712,51.0472,"Donkey",100,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Gargur","Tangistan",28.8712,51.0472,"Horse",4,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Gargur","Tangistan",28.8712,51.0472,"Mule",2,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Gargur","Tangistan",28.8712,51.0472,"Sheep and Goats",1000,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Ghabbi","Badiyah",22.43725,58.81298,"Camel",20,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Ghabbi","Badiyah",22.43725,58.81298,"Cattle",200,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Ghabbi","Badiyah",22.43725,58.81298,"Donkey",20,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Ghabbi","Badiyah",22.43725,58.81298,"Sheep and Goats",2000,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Gharab (Umm-al-)","Shatt al-Arab",null,null,"Cattle",200,112,"A tract on the Shatt al-Arab; the source reports the livestock for the tract rather than a single settlement.","No reliable coordinate match; left blank.","Expanded extraction"],["Gharab (Umm-al-)","Shatt al-Arab",null,null,"Horse",10,112,"A tract on the Shatt al-Arab; the source reports the livestock for the tract rather than a single settlement.","No reliable coordinate match; left blank.","Expanded extraction"],["Gharab (Umm-al-)","Shatt al-Arab",null,null,"Sheep and Goats",50,112,"A tract on the Shatt al-Arab; the source reports the livestock for the tract rather than a single settlement.","No reliable coordinate match; left blank.","Expanded extraction"],["Gharaifah","Sharqiyin / Fujairah",25.12496,56.35381,"Cattle",100,1695,null,"Selected Fujairah-area match; same name occurs elsewhere in Oman.","Expanded extraction"],["Gharaifah","Sharqiyin / Fujairah",25.12496,56.35381,"Donkey",10,1695,null,"Selected Fujairah-area match; same name occurs elsewhere in Oman.","Expanded extraction"],["Gharifah","Not specified in first dataset",24.99525,55.85787,"Horse",10,1695,"Carried forward from the original Kepler dataset.","Matched to Gharif; spelling differs from the extracted name.","First Kepler file"],["Gharifah","Not specified in first dataset",24.99525,55.85787,"Sheep",100,1695,"Carried forward from the original Kepler dataset.","Matched to Gharif; spelling differs from the extracted name.","First Kepler file"],["Ghuraifah","Bahrain",26.20549,50.602,"Cattle",1,219,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Ghuraifah","Bahrain",26.20549,50.602,"Donkey",6,219,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Gurak","Tangistan",28.9458,51.0528,"Camel",40,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Gurak","Tangistan",28.9458,51.0528,"Cattle",35,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Gurak","Tangistan",28.9458,51.0528,"Donkey",110,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Gurak","Tangistan",28.9458,51.0528,"Horse",5,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Gurak","Tangistan",28.9458,51.0528,"Mule",4,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Gurak","Tangistan",28.9458,51.0528,"Sheep and Goats",1300,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Gāinak","Tangistan",28.7879,51.0691,"Camel",30,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Gāinak","Tangistan",28.7879,51.0691,"Cattle",70,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Gāinak","Tangistan",28.7879,51.0691,"Donkey",100,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Gāinak","Tangistan",28.7879,51.0691,"Horse",4,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Gāinak","Tangistan",28.7879,51.0691,"Mule",3,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Gāinak","Tangistan",28.7879,51.0691,"Sheep and Goats",1200,1865,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Habshi (Jabalat)","Bahrain",26.21722,50.5275,"Cattle",3,220,null,"Matched to Habshi in Bahrain Island entries.","Expanded extraction"],["Habshi (Jabalat)","Bahrain",26.21722,50.5275,"Donkey",17,220,null,"Matched to Habshi in Bahrain Island entries.","Expanded extraction"],["Haili","Badiyah",22.62497,58.81919,"Camel",15,195,null,"Selected Haili in Badiyah; another Haili exists elsewhere in Oman.","Expanded extraction"],["Haili","Badiyah",22.62497,58.81919,"Cattle",10,195,null,"Selected Haili in Badiyah; another Haili exists elsewhere in Oman.","Expanded extraction"],["Haili","Badiyah",22.62497,58.81919,"Donkey",10,195,null,"Selected Haili in Badiyah; another Haili exists elsewhere in Oman.","Expanded extraction"],["Haili","Badiyah",22.62497,58.81919,"Sheep and Goats",20,195,null,"Selected Haili in Badiyah; another Haili exists elsewhere in Oman.","Expanded extraction"],["Hair","Sharjah",25.38148,55.41955,"Camel",40,758,"Source reports 200 sheep and goats together.","Exact-name match in Sharjah-area entries.","Both datasets"],["Hair","Sharjah",25.38148,55.41955,"Cattle",40,758,"Source reports 200 sheep and goats together.","Exact-name match in Sharjah-area entries.","Both datasets"],["Hair","Sharjah",25.38148,55.41955,"Donkey",60,758,"Source reports 200 sheep and goats together.","Exact-name match in Sharjah-area entries.","Both datasets"],["Hair","Sharjah",25.38148,55.41955,"Sheep and Goats",200,758,"Source reports 200 sheep and goats together.","Exact-name match in Sharjah-area entries.","Expanded extraction"],["Hajar","Bahrain",26.21111,50.51389,"Cattle",4,220,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Hajar","Bahrain",26.21111,50.51389,"Donkey",18,220,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Hamalah","Bahrain",26.14333,50.45944,"Cattle",1,220,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Hamalah","Bahrain",26.14333,50.45944,"Donkey",8,220,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Hashniz","Persian Coast / Asuh Darveh",27.08088,53.52951,"Camel",70,179,"Source reports 2,000 sheep and goats together.","Exact-name match in Asuh Darveh.","Both datasets"],["Hashniz","Persian Coast / Asuh Darveh",27.08088,53.52951,"Cattle",150,179,"Source reports 2,000 sheep and goats together.","Exact-name match in Asuh Darveh.","Both datasets"],["Hashniz","Persian Coast / Asuh Darveh",27.08088,53.52951,"Donkey",200,179,"Source reports 2,000 sheep and goats together.","Exact-name match in Asuh Darveh.","Both datasets"],["Hashniz","Persian Coast / Asuh Darveh",27.08088,53.52951,"Sheep and Goats",2000,179,"Source reports 2,000 sheep and goats together.","Exact-name match in Asuh Darveh.","Expanded extraction"],["Hawiya","Badiyah",22.38971,58.8529,"Camel",20,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Hawiya","Badiyah",22.38971,58.8529,"Cattle",100,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Hawiya","Badiyah",22.38971,58.8529,"Donkey",20,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Hawiya","Badiyah",22.38971,58.8529,"Sheep and Goats",1000,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Hujair","Bahrain",26.18333,50.55,"Cattle",2,220,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Hujair","Bahrain",26.18333,50.55,"Donkey",18,220,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Hātūh","Badiyah",22.45847,58.78628,"Camel",20,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Hātūh","Badiyah",22.45847,58.78628,"Cattle",60,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Hātūh","Badiyah",22.45847,58.78628,"Donkey",30,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Hātūh","Badiyah",22.45847,58.78628,"Sheep and Goats",1200,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Hūrah","Bahrain",null,null,"Cattle",2,220,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Hūrah","Bahrain",null,null,"Donkey",8,220,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Ihsham Shaikh","Tangistan",null,null,"Camel",30,1866,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Ihsham Shaikh","Tangistan",null,null,"Cattle",30,1866,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Ihsham Shaikh","Tangistan",null,null,"Donkey",50,1866,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Ihsham Shaikh","Tangistan",null,null,"Horse",2,1866,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Ihsham Shaikh","Tangistan",null,null,"Mule",2,1866,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Ihsham Shaikh","Tangistan",null,null,"Sheep and Goats",500,1866,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Iswar (Halat Bin-)","Bahrain",null,null,"Cattle",4,220,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Iswar (Halat Bin-)","Bahrain",null,null,"Donkey",3,220,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Jabalah","Bahrain",26.22306,50.54972,"Cattle",1,220,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Jabalah","Bahrain",26.22306,50.54972,"Donkey",4,220,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Jamrah (Bani)","Bahrain",26.20972,50.45972,"Donkey",25,221,null,"Matched to Jamrah in Bahrain Island entries.","Expanded extraction"],["Jamrah (Bani)","Bahrain",26.20972,50.45972,"Horse",25,221,null,"Matched to Jamrah in Bahrain Island entries.","First Kepler file"],["Janabiyah","Bahrain",26.19,50.46778,"Cattle",2,221,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Janabiyah","Bahrain",26.19,50.46778,"Donkey",8,221,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Jannusan","Bahrain",26.23056,50.49472,"Cattle",6,221,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Jannusan","Bahrain",26.23056,50.49472,"Donkey",15,221,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Jannūsān","Not specified in first dataset",26.23056,50.49472,"Horse",15,221,"Carried forward from the original Kepler dataset.","Exact-name match; Bahrain Island.","First Kepler file"],["Jannūsān","Not specified in first dataset",26.23056,50.49472,"Sheep",5,221,"Carried forward from the original Kepler dataset.","Exact-name match; Bahrain Island.","First Kepler file"],["Janābiyah","Not specified in first dataset",26.19,50.46778,"Horse",8,221,"Carried forward from the original Kepler dataset.","Exact-name match; Bahrain Island.","First Kepler file"],["Jasrah","Bahrain",26.16472,50.44722,"Cattle",2,221,null,"Selected Bahrain Island match; another nearby coordinate record exists.","Expanded extraction"],["Jasrah","Bahrain",26.16472,50.44722,"Donkey",9,221,null,"Selected Bahrain Island match; another nearby coordinate record exists.","Expanded extraction"],["Jasrah","Bahrain",26.16472,50.44722,"Horse",9,221,null,"Selected Bahrain Island match; another nearby coordinate record exists.","First Kepler file"],["Jasrah","Bahrain",26.16472,50.44722,"Sheep",2,221,null,"Selected Bahrain Island match; another nearby coordinate record exists.","First Kepler file"],["Jau","Bahrain",25.99861,50.61667,"Cattle",25,221,null,"Selected Bahrain Island Jau; same name occurs elsewhere.","Expanded extraction"],["Jau","Bahrain",25.99861,50.61667,"Donkey",8,221,null,"Selected Bahrain Island Jau; same name occurs elsewhere.","Expanded extraction"],["Jau","Bahrain",25.99861,50.61667,"Horse",8,221,null,"Selected Bahrain Island Jau; same name occurs elsewhere.","First Kepler file"],["Jau","Bahrain",25.99861,50.61667,"Sheep",25,221,null,"Selected Bahrain Island Jau; same name occurs elsewhere.","First Kepler file"],["Jawāhari (Tul)","Tangistan",29.30917,51.40611,"Cattle",25,1866,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Jawāhari (Tul)","Tangistan",29.30917,51.40611,"Donkey",55,1866,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Jawāhari (Tul)","Tangistan",29.30917,51.40611,"Horse",3,1866,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Jawāhari (Tul)","Tangistan",29.30917,51.40611,"Mule",4,1866,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Jawāhari (Tul)","Tangistan",29.30917,51.40611,"Sheep and Goats",600,1866,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Jidd 'Ali","Bahrain",26.17917,50.56028,"Cattle",3,222,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Jidd 'Ali","Bahrain",26.17917,50.56028,"Donkey",18,222,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Jidd Hafs","Bahrain",26.21861,50.54778,"Cattle",13,222,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Jidd Hafs","Bahrain",26.21861,50.54778,"Donkey",50,222,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Jidd-al-Hajj","Bahrain",26.23333,50.5,"Cattle",3,222,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Jidd-al-Hajj","Bahrain",26.23333,50.5,"Donkey",17,222,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Jubailat","Bahrain",26.23333,50.51667,"Cattle",3,222,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Jubailat","Bahrain",26.23333,50.51667,"Donkey",3,222,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Jufair","Bahrain",26.21472,50.61222,"Cattle",4,222,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Jufair","Bahrain",26.21472,50.61222,"Donkey",7,222,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Jufair","Bahrain",26.21472,50.61222,"Horse",2,222,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Jumairah","Dubai",25.20795,55.24969,"Camel",5,454,"Source reports 200 sheep and goats together.","Exact-name match.","Both datasets"],["Jumairah","Dubai",25.20795,55.24969,"Cattle",45,454,"Source reports 200 sheep and goats together.","Exact-name match.","Both datasets"],["Jumairah","Dubai",25.20795,55.24969,"Donkey",60,454,"Source reports 200 sheep and goats together.","Exact-name match.","Both datasets"],["Jumairah","Dubai",25.20795,55.24969,"Sheep and Goats",200,454,"Source reports 200 sheep and goats together.","Exact-name match.","Expanded extraction"],["Karanah","Bahrain",26.22917,50.50944,"Cattle",12,223,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Karanah","Bahrain",26.22917,50.50944,"Donkey",15,223,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Karbabad","Bahrain",26.23028,50.52944,"Cattle",3,223,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Karbabad","Bahrain",26.23028,50.52944,"Donkey",23,223,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Karti","Tangistan",null,null,"Camel",30,1866,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Karti","Tangistan",null,null,"Donkey",50,1866,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Karti","Tangistan",null,null,"Horse",4,1866,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Karti","Tangistan",null,null,"Sheep and Goats",500,1866,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Karzakkan","Bahrain",26.11556,50.48194,"Cattle",8,223,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Karzakkan","Bahrain",26.11556,50.48194,"Donkey",24,223,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Kawarab","Bahrain",26.18333,50.56667,"Cattle",3,223,null,"Matched to Kawarah in Bahrain Island entries.","Expanded extraction"],["Kawarab","Bahrain",26.18333,50.56667,"Donkey",14,223,null,"Matched to Kawarah in Bahrain Island entries.","Expanded extraction"],["Khafir (Abu)","Bahrain",null,null,"Cattle",2,223,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Khafir (Abu)","Bahrain",null,null,"Donkey",4,223,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Khalaibiyah","Wadi Ham",25.38124,56.17358,"Cattle",30,619,"Source says '30 cattle, 200 sheep and goats'; sheep and goats are combined.","Exact-name match.","Expanded extraction"],["Khalaibiyah","Wadi Ham",25.38124,56.17358,"Sheep",30,619,"Source says '30 cattle, 200 sheep and goats'; sheep and goats are combined.","Exact-name match.","First Kepler file"],["Khalaibiyah","Wadi Ham",25.38124,56.17358,"Sheep and Goats",200,619,"Source says '30 cattle, 200 sheep and goats'; sheep and goats are combined.","Exact-name match.","Expanded extraction"],["Khan","Sharjah",25.33141,55.35901,"Camel",115,null,"Source wording: 'about 115 camels, 85 donkeys, 35 cattle and 170 goats'.","Selected Khan in Sharjah-area entries; same name occurs elsewhere.","Both datasets"],["Khan","Sharjah",25.33141,55.35901,"Cattle",35,null,"Source wording: 'about 115 camels, 85 donkeys, 35 cattle and 170 goats'.","Selected Khan in Sharjah-area entries; same name occurs elsewhere.","Both datasets"],["Khan","Sharjah",25.33141,55.35901,"Donkey",85,null,"Source wording: 'about 115 camels, 85 donkeys, 35 cattle and 170 goats'.","Selected Khan in Sharjah-area entries; same name occurs elsewhere.","Both datasets"],["Khan","Sharjah",25.33141,55.35901,"Goat",170,null,"Source wording: 'about 115 camels, 85 donkeys, 35 cattle and 170 goats'.","Selected Khan in Sharjah-area entries; same name occurs elsewhere.","Expanded extraction"],["Kharijiyah","Sitrah",26.16361,50.60472,"Cattle",3,1832,null,"Matched to Khārijīyah in Sitrah entries.","Expanded extraction"],["Kharijiyah","Sitrah",26.16361,50.60472,"Donkey",13,1832,null,"Matched to Khārijīyah in Sitrah entries.","Expanded extraction"],["Khawatir (Jau and Jiri plain)","Sharjah / Jiri plain",null,null,"Camel",800,1303,"Tribal aggregate: source locates the Khawatir at Hafit village in Jau and the Jiri plain in Sharjah. It says they own 'some 800 camels', 70 donkeys, 100 cattle and 1,500 sheep and goats; no single point coordinate is given.","No reliable coordinate match; left blank.","Expanded extraction"],["Khawatir (Jau and Jiri plain)","Sharjah / Jiri plain",null,null,"Cattle",100,1303,"Tribal aggregate: source locates the Khawatir at Hafit village in Jau and the Jiri plain in Sharjah. It says they own 'some 800 camels', 70 donkeys, 100 cattle and 1,500 sheep and goats; no single point coordinate is given.","No reliable coordinate match; left blank.","Expanded extraction"],["Khawatir (Jau and Jiri plain)","Sharjah / Jiri plain",null,null,"Donkey",70,1303,"Tribal aggregate: source locates the Khawatir at Hafit village in Jau and the Jiri plain in Sharjah. It says they own 'some 800 camels', 70 donkeys, 100 cattle and 1,500 sheep and goats; no single point coordinate is given.","No reliable coordinate match; left blank.","Expanded extraction"],["Khawatir (Jau and Jiri plain)","Sharjah / Jiri plain",null,null,"Sheep and Goats",1500,1303,"Tribal aggregate: source locates the Khawatir at Hafit village in Jau and the Jiri plain in Sharjah. It says they own 'some 800 camels', 70 donkeys, 100 cattle and 1,500 sheep and goats; no single point coordinate is given.","No reliable coordinate match; left blank.","Expanded extraction"],["Khiyari","Tangistan",28.8698,51.1774,"Camel",50,1866,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Khiyari","Tangistan",28.8698,51.1774,"Cattle",20,1866,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Khiyari","Tangistan",28.8698,51.1774,"Donkey",100,1866,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Khiyari","Tangistan",28.8698,51.1774,"Horse",4,1866,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Khiyari","Tangistan",28.8698,51.1774,"Mule",2,1866,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Khiyari","Tangistan",28.8698,51.1774,"Sheep and Goats",1000,1866,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Khuraijan","Bahrain",null,null,"Cattle",1,223,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Khuraijan","Bahrain",null,null,"Donkey",11,223,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Khuvair (Khor)","Tangistan",null,null,"Camel",10,1866,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Khuvair (Khor)","Tangistan",null,null,"Donkey",20,1866,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Khuvair (Khor)","Tangistan",null,null,"Sheep and Goats",100,1866,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Kulaib (Dar)","Bahrain",26.06861,50.50389,"Cattle",12,223,null,"Matched to Kulaib in Bahrain Island entries.","Expanded extraction"],["Kulaib (Dar)","Bahrain",26.06861,50.50389,"Donkey",26,223,null,"Matched to Kulaib in Bahrain Island entries.","Expanded extraction"],["Kunardun","Persian Coast / Asuh Darveh",27.1365,53.3013,"Camel",20,179,"Source reports 3,000 sheep and goats together.","Exact-name match in Asuh Darveh.","Both datasets"],["Kunardun","Persian Coast / Asuh Darveh",27.1365,53.3013,"Cattle",30,179,"Source reports 3,000 sheep and goats together.","Exact-name match in Asuh Darveh.","Both datasets"],["Kunardun","Persian Coast / Asuh Darveh",27.1365,53.3013,"Donkey",50,179,"Source reports 3,000 sheep and goats together.","Exact-name match in Asuh Darveh.","Both datasets"],["Kunardun","Persian Coast / Asuh Darveh",27.1365,53.3013,"Sheep and Goats",3000,179,"Source reports 3,000 sheep and goats together.","Exact-name match in Asuh Darveh.","Expanded extraction"],["Laz","Shaikh Shu'aib",26.80742,53.37411,"Cattle",10,1814,null,"Exact-name match in Shaikh Shu'aib entries.","Expanded extraction"],["Laz","Shaikh Shu'aib",26.80742,53.37411,"Donkey",7,1814,null,"Exact-name match in Shaikh Shu'aib entries.","Expanded extraction"],["Laz","Shaikh Shu'aib",26.80742,53.37411,"Sheep and Goats",100,1814,null,"Exact-name match in Shaikh Shu'aib entries.","Expanded extraction"],["Laza","Shaikh Shu'aib",26.8218,53.3186,"Cattle",10,1814,null,"Exact-name match in Shaikh Shu'aib entries.","Expanded extraction"],["Laza","Shaikh Shu'aib",26.8218,53.3186,"Sheep and Goats",150,1814,null,"Exact-name match in Shaikh Shu'aib entries.","Expanded extraction"],["Lusail","Qatar",25.4908,51.48439,"Camel",70,null,null,"Exact-name match in Qatar entries.","Both datasets"],["Lusail","Qatar",25.4908,51.48439,"Horse",20,null,null,"Exact-name match in Qatar entries.","Expanded extraction"],["Lusail","Qatar",25.4908,51.48439,"Sheep",20,null,null,"Exact-name match in Qatar entries.","First Kepler file"],["Ma'amir","Bahrain",26.13333,50.60861,"Cattle",3,224,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Ma'amir","Bahrain",26.13333,50.60861,"Donkey",9,224,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Madūmari","Tangistan",28.726,51.0745,"Camel",20,1867,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Madūmari","Tangistan",28.726,51.0745,"Cattle",10,1867,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Madūmari","Tangistan",28.726,51.0745,"Donkey",50,1867,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Madūmari","Tangistan",28.726,51.0745,"Sheep and Goats",300,1867,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Magaba","Bahrain",26.21083,50.4875,"Cattle",8,224,null,"Matched to Maqāba in Bahrain Island entries.","Expanded extraction"],["Magaba","Bahrain",26.21083,50.4875,"Donkey",20,224,null,"Matched to Maqāba in Bahrain Island entries.","Expanded extraction"],["Mahadhah Village","Mahadhah",24.40472,55.95333,"Camel",300,1119,"Source says livestock are 'said to be' 300 camels, 400 donkeys, 400 cattle and 100,000 sheep and goats.","Matched to Mahadhah in Oman Trucial / Mahadhah entries.","Both datasets"],["Mahadhah Village","Mahadhah",24.40472,55.95333,"Cattle",400,1119,"Source says livestock are 'said to be' 300 camels, 400 donkeys, 400 cattle and 100,000 sheep and goats.","Matched to Mahadhah in Oman Trucial / Mahadhah entries.","Both datasets"],["Mahadhah Village","Mahadhah",24.40472,55.95333,"Donkey",400,1119,"Source says livestock are 'said to be' 300 camels, 400 donkeys, 400 cattle and 100,000 sheep and goats.","Matched to Mahadhah in Oman Trucial / Mahadhah entries.","Both datasets"],[null,null,null,null,null,null,null,null,"Matched to Mahadhah in Oman Trucial / Mahadhah entries.","Expanded extraction"],["Mahuz","Bahrain",26.21222,50.58889,"Cattle",2,224,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Mahuz","Bahrain",26.21222,50.58889,"Donkey",19,224,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Makri","Tangistan",null,null,"Camel",30,1867,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Makri","Tangistan",null,null,"Cattle",25,1867,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Makri","Tangistan",null,null,"Horse",2,1867,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Makri","Tangistan",null,null,"Sheep and Goats",800,1867,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Malikiyah","Bahrain",26.09806,50.48667,"Cattle",10,224,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Malikiyah","Bahrain",26.09806,50.48667,"Donkey",18,224,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Mani","Bahrain",26.21667,50.55,"Cattle",4,224,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Mani","Bahrain",26.21667,50.55,"Donkey",19,224,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Mankali (Qal'eh-i-)","Tangistan",28.8856,51.1666,"Camel",20,1867,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Mankali (Qal'eh-i-)","Tangistan",28.8856,51.1666,"Donkey",30,1867,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Mankali (Qal'eh-i-)","Tangistan",28.8856,51.1666,"Horse",2,1867,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Mankali (Qal'eh-i-)","Tangistan",28.8856,51.1666,"Sheep and Goats",200,1867,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Marghaban","Sitrah",26.16417,50.61833,"Cattle",5,1832,null,"Matched to Marqūbān in Sitrah entries.","Expanded extraction"],["Marghaban","Sitrah",26.16417,50.61833,"Donkey",6,1832,null,"Matched to Marqūbān in Sitrah entries.","Expanded extraction"],["Markh","Bahrain",26.01111,50.49944,"Cattle",3,224,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Markh","Bahrain",26.01111,50.49944,"Donkey",15,224,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Marwazin","Bahrain",26.22139,50.54389,"Cattle",3,225,null,"Matched to Marwazān in Bahrain Island entries.","Expanded extraction"],["Marwazin","Bahrain",26.22139,50.54389,"Donkey",10,225,null,"Matched to Marwazān in Bahrain Island entries.","Expanded extraction"],["Masafi","Wadi Ham",25.30129,56.16531,"Camel",20,619,"Source says livestock are 'placed at' 20 camels, 50 donkeys, 30 cattle and 850 sheep.","Exact-name match.","Both datasets"],["Masafi","Wadi Ham",25.30129,56.16531,"Cattle",30,619,"Source says livestock are 'placed at' 20 camels, 50 donkeys, 30 cattle and 850 sheep.","Exact-name match.","Both datasets"],["Masafi","Wadi Ham",25.30129,56.16531,"Donkey",50,619,"Source says livestock are 'placed at' 20 camels, 50 donkeys, 30 cattle and 850 sheep.","Exact-name match.","Both datasets"],["Masafi","Wadi Ham",25.30129,56.16531,"Sheep",850,619,"Source says livestock are 'placed at' 20 camels, 50 donkeys, 30 cattle and 850 sheep.","Exact-name match.","Both datasets"],["Midar Hassani","Tangistan",null,null,"Camel",10,1867,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Midar Hassani","Tangistan",null,null,"Donkey",20,1867,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Midar Hassani","Tangistan",null,null,"Sheep and Goats",100,1867,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Mintirib","Badiyah",22.4301,58.80591,"Camel",100,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Mintirib","Badiyah",22.4301,58.80591,"Cattle",250,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Mintirib","Badiyah",22.4301,58.80591,"Donkey",300,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Mintirib","Badiyah",22.4301,58.80591,"Sheep and Goats",5000,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Mugsha'","Bahrain",null,null,"Cattle",8,225,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Mugsha'","Bahrain",null,null,"Donkey",9,225,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Muhazzah","Sitrah",26.16944,50.62611,"Cattle",7,1832,null,"Exact-name match in Sitrah entries.","Expanded extraction"],["Muhazzah","Sitrah",26.16944,50.62611,"Donkey",4,1832,null,"Exact-name match in Sitrah entries.","Expanded extraction"],["Muhmid Ahmadi","Tangistan",28.9254,51.272,"Camel",70,1867,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Muhmid Ahmadi","Tangistan",28.9254,51.272,"Cattle",50,1867,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Muhmid Ahmadi","Tangistan",28.9254,51.272,"Donkey",100,1867,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Muhmid Ahmadi","Tangistan",28.9254,51.272,"Horse",2,1867,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Muhmid Ahmadi","Tangistan",28.9254,51.272,"Mule",4,1867,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Muhmid Ahmadi","Tangistan",28.9254,51.272,"Sheep and Goats",1500,1867,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Musalla","Bahrain",26.21222,50.53722,"Cattle",4,225,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Musalla","Bahrain",26.21222,50.53722,"Donkey",5,225,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Mutawa'","Shatt al-Arab",30.4146,48.1587,"Sheep and Goats",60,112,"Source says 'about 60 sheep and goats'.","Exact-name match in Shatt al-Arab entries.","Expanded extraction"],["Muwailghah","Bahrain",26.20667,50.55889,"Cattle",1,225,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Muwailghah","Bahrain",26.20667,50.55889,"Donkey",5,225,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Nabi Salih","Bahrain",26.18212,50.58562,"Cattle",6,1656,null,"Exact-name match.","Expanded extraction"],["Nabi Salih","Bahrain",26.18212,50.58562,"Donkey",11,1656,null,"Exact-name match.","Expanded extraction"],["Nargizār","Tangistan",null,null,"Camel",25,1867,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Nargizār","Tangistan",null,null,"Cattle",30,1867,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Nargizār","Tangistan",null,null,"Donkey",50,1867,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Nargizār","Tangistan",null,null,"Horse",2,1867,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Nargizār","Tangistan",null,null,"Sheep and Goats",500,1867,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Nur Juruf","Bahrain",26.23333,50.5,"Cattle",2,225,null,"Matched to Nūr Juruft in Bahrain Island entries.","Expanded extraction"],["Nur Juruf","Bahrain",26.23333,50.5,"Donkey",15,225,null,"Matched to Nūr Juruft in Bahrain Island entries.","Expanded extraction"],["Nuwaidrat","Bahrain",26.13472,50.5975,"Cattle",2,225,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Nuwaidrat","Bahrain",26.13472,50.5975,"Donkey",11,225,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Paidh (Halat Umm al-)","Sitrah",26.11667,50.63333,"Cattle",6,1832,null,"Exact-name match in Sitrah entries.","Expanded extraction"],["Paidh (Halat Umm al-)","Sitrah",26.11667,50.63333,"Donkey",7,1832,null,"Exact-name match in Sitrah entries.","Expanded extraction"],["Pudar","Bushehr Peninsula",28.975,50.86111,"Donkey",12,336,"Source says 'a dozen donkeys' (entered as 12) and 'a few horses and cattle' without exact counts.","Exact-name match in Bushehr Peninsula.","Both datasets"],["Qadam","Bahrain",26.21556,50.51917,"Cattle",2,225,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Qadam","Bahrain",26.21556,50.51917,"Donkey",12,225,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Qal'ah","Bahrain",null,null,"Cattle",3,225,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Qal'ah","Bahrain",null,null,"Donkey",9,225,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Qumzan","Abu Dhabi / Bani Yas",null,null,"Camel",100,1934,"Bani Yas section; source locates the section in Abu Dhabi Town and adjoining country, especially near Raknah. The reported count is 100 camels.","No reliable coordinate match; left blank.","Both datasets"],["Quraiyah","Bahrain",26.19722,50.46278,"Cattle",5,225,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Quraiyah","Bahrain",26.19722,50.46278,"Donkey",9,225,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Qurat","Shaikh Shu'aib",26.7885,53.2982,"Cattle",10,1814,null,"Exact-name match in Shaikh Shu'aib entries.","Expanded extraction"],["Qurat","Shaikh Shu'aib",26.7885,53.2982,"Donkey",5,1814,null,"Exact-name match in Shaikh Shu'aib entries.","Expanded extraction"],["Qurat","Shaikh Shu'aib",26.7885,53.2982,"Sheep and Goats",120,1814,null,"Exact-name match in Shaikh Shu'aib entries.","Expanded extraction"],["Quryah","Sitrah",26.18278,50.58361,"Cattle",2,1833,null,"Exact-name match in Sitrah entries.","Expanded extraction"],["Quryah","Sitrah",26.18278,50.58361,"Donkey",7,1833,null,"Exact-name match in Sitrah entries.","Expanded extraction"],["Qā'","Badiyah",22.49475,58.73489,"Camel",12,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Qā'","Badiyah",22.49475,58.73489,"Cattle",20,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Qā'","Badiyah",22.49475,58.73489,"Donkey",20,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Qā'","Badiyah",22.49475,58.73489,"Sheep and Goats",200,195,null,"Exact-name match in Badiyah.","Expanded extraction"],["Rakah","Badiyah",22.41575,58.78401,"Camel",40,195,null,"Matched to Rākah in Badiyah.","Expanded extraction"],["Rakah","Badiyah",22.41575,58.78401,"Donkey",30,195,null,"Matched to Rākah in Badiyah.","Expanded extraction"],["Rakah","Badiyah",22.41575,58.78401,"Sheep and Goats",6000,195,null,"Matched to Rākah in Badiyah.","Expanded extraction"],["Ras","Shaikh Shu'aib",26.84723,53.15729,"Cattle",10,1814,null,"Exact-name match in Shaikh Shu'aib entries.","Expanded extraction"],["Ras","Shaikh Shu'aib",26.84723,53.15729,"Donkey",6,1814,null,"Exact-name match in Shaikh Shu'aib entries.","Expanded extraction"],["Ras","Shaikh Shu'aib",26.84723,53.15729,"Sheep and Goats",100,1814,null,"Exact-name match in Shaikh Shu'aib entries.","Expanded extraction"],["Ravani","Bushehr Peninsula",28.8959,50.8466,"Sheep and Goats",50,336,"Source says 'about 50 sheep and goats'; it also mentions a few cattle and donkeys without exact counts.","Exact-name match in Bushehr Peninsula.","Expanded extraction"],["Rifa'-ash-Sharqi","Bahrain",26.12389,50.57361,"Cattle",20,null,null,"Selected Bahrain Island match; another close coordinate record exists.","Both datasets"],["Rifa'-ash-Sharqi","Bahrain",26.12389,50.57361,"Donkey",85,null,null,"Selected Bahrain Island match; another close coordinate record exists.","Both datasets"],["Rifa'-ash-Sharqi","Bahrain",26.12389,50.57361,"Horse",16,null,null,"Selected Bahrain Island match; another close coordinate record exists.","Both datasets"],["Rumaihath","Abu Dhabi / Bani Yas",null,null,"Camel",100,1934,"Bani Yas section; source locates the section in Abu Dhabi Town and adjoining country, particularly around Samaih. The reported count is 100 camels.","No reliable coordinate match; left blank.","Both datasets"],["Ruq'ah","Bahrain",26.23333,50.5,"Cattle",3,226,null,"Matched to Ruqa'ah in Bahrain Island entries.","Expanded extraction"],["Ruq'ah","Bahrain",26.23333,50.5,"Donkey",18,226,null,"Matched to Ruqa'ah in Bahrain Island entries.","Expanded extraction"],["Ruwais","Shatt al-Arab",30.38333,48.16667,"Cattle",200,112,null,"Selected Ruwais in Shatt al-Arab entries; same name occurs elsewhere.","Expanded extraction"],["Ruwais","Shatt al-Arab",30.38333,48.16667,"Horse",20,112,null,"Selected Ruwais in Shatt al-Arab entries; same name occurs elsewhere.","Expanded extraction"],["Ruwais","Shatt al-Arab",30.38333,48.16667,"Sheep and Goats",80,112,null,"Selected Ruwais in Shatt al-Arab entries; same name occurs elsewhere.","Expanded extraction"],["Ruzaikkan","Bahrain",null,null,"Cattle",1,226,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Ruzaikkan","Bahrain",null,null,"Donkey",13,226,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Sablat-al-Fuqiyah","Bahrain",26.20556,50.53056,"Cattle",5,226,null,"Matched to Sahlat-al-Fūqīyah in Bahrain Island entries.","Expanded extraction"],["Sablat-al-Fuqiyah","Bahrain",26.20556,50.53056,"Donkey",23,226,null,"Matched to Sahlat-al-Fūqīyah in Bahrain Island entries.","Expanded extraction"],["Sablat-al-Fuqiyah","Bahrain",26.20556,50.53056,"Horse",2,226,null,"Matched to Sahlat-al-Fūqīyah in Bahrain Island entries.","Expanded extraction"],["Sadad","Bahrain",26.08278,50.48972,"Cattle",5,226,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Sadad","Bahrain",26.08278,50.48972,"Donkey",16,226,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Sahlat-al-Hadriyah","Bahrain",26.20167,50.53583,"Cattle",3,227,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Sahlat-al-Hadriyah","Bahrain",26.20167,50.53583,"Donkey",7,227,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Saibi (Abu)","Bahrain",26.2175,50.50694,"Cattle",3,226,null,"Matched to Saibi in Bahrain Island entries.","Expanded extraction"],["Saibi (Abu)","Bahrain",26.2175,50.50694,"Donkey",8,226,null,"Matched to Saibi in Bahrain Island entries.","Expanded extraction"],["Salih (Hillat 'Abdus)","Bahrain",26.22139,50.51667,"Cattle",4,227,null,"Matched to Sālih in Bahrain Island entries.","Expanded extraction"],["Salih (Hillat 'Abdus)","Bahrain",26.22139,50.51667,"Donkey",5,227,null,"Matched to Sālih in Bahrain Island entries.","Expanded extraction"],["Salimabdeh","Tangistan",28.44322,51.12843,"Cattle",10,1868,null,"Matched to Sālimābādeh in Tangistan entries.","Expanded extraction"],["Salimabdeh","Tangistan",28.44322,51.12843,"Donkey",20,1868,null,"Matched to Sālimābādeh in Tangistan entries.","Expanded extraction"],["Salimabdeh","Tangistan",28.44322,51.12843,"Sheep and Goats",100,1868,null,"Matched to Sālimābādeh in Tangistan entries.","Expanded extraction"],["Salmabad","Bahrain",26.18306,50.52472,"Cattle",5,227,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Salmabad","Bahrain",26.18306,50.52472,"Donkey",15,227,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Samil 'Ali","Tangistan",null,null,"Cattle",30,1868,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Samil 'Ali","Tangistan",null,null,"Donkey",50,1868,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Samil 'Ali","Tangistan",null,null,"Horse",4,1868,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Samil 'Ali","Tangistan",null,null,"Sheep and Goats",600,1868,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Sanabis","Bahrain",26.22722,50.55083,"Cattle",10,227,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Sanabis","Bahrain",26.22722,50.55083,"Donkey",16,227,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Sanad","Bahrain",26.15028,50.58194,"Cattle",7,228,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Sanad","Bahrain",26.15028,50.58194,"Donkey",25,228,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Sar","Bahrain",26.19417,50.48194,"Cattle",7,228,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Sar","Bahrain",26.19417,50.48194,"Donkey",17,228,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Sfun(i)","Not specified in first dataset",25.1707,56.10159,"Camel",30,619,"Carried forward from the original Kepler dataset.","Matched to Sfun in Ham Wadi.","First Kepler file"],["Sfun(i)","Not specified in first dataset",25.1707,56.10159,"Cattle",60,619,"Carried forward from the original Kepler dataset.","Matched to Sfun in Ham Wadi.","First Kepler file"],["Sfun(i)","Not specified in first dataset",25.1707,56.10159,"Donkey",200,619,"Carried forward from the original Kepler dataset.","Matched to Sfun in Ham Wadi.","First Kepler file"],["Sfuni","Wadi Ham",25.1707,56.10159,"Camel",30,619,"Source reports 1,000 sheep and goats together.","Matched to Sfuni in Ham Wadi.","Expanded extraction"],["Sfuni","Wadi Ham",25.1707,56.10159,"Cattle",60,619,"Source reports 1,000 sheep and goats together.","Matched to Sfuni in Ham Wadi.","Expanded extraction"],["Sfuni","Wadi Ham",25.1707,56.10159,"Donkey",200,619,"Source reports 1,000 sheep and goats together.","Matched to Sfuni in Ham Wadi.","Expanded extraction"],["Sfuni","Wadi Ham",25.1707,56.10159,"Sheep and Goats",1000,619,"Source reports 1,000 sheep and goats together.","Matched to Sfuni in Ham Wadi.","Expanded extraction"],["Sha'am","Ras al-Khaimah",26.0279,56.08352,"Camel",30,null,"Source wording: 'about 30 camels, 50 donkeys, 20 cattle and some sheep and goats'; no number is given for the sheep and goats.","Exact-name match.","Both datasets"],["Sha'am","Ras al-Khaimah",26.0279,56.08352,"Cattle",20,null,"Source wording: 'about 30 camels, 50 donkeys, 20 cattle and some sheep and goats'; no number is given for the sheep and goats.","Exact-name match.","Both datasets"],["Sha'am","Ras al-Khaimah",26.0279,56.08352,"Donkey",50,null,"Source wording: 'about 30 camels, 50 donkeys, 20 cattle and some sheep and goats'; no number is given for the sheep and goats.","Exact-name match.","Both datasets"],["Shabrakkan","Bahrain",26.07528,50.50139,"Cattle",7,228,null,"Matched to Shahrakkān in Bahrain Island entries.","Expanded extraction"],["Shabrakkan","Bahrain",26.07528,50.50139,"Donkey",15,228,null,"Matched to Shahrakkān in Bahrain Island entries.","Expanded extraction"],["Shahabi (Khur)","Tangistan",28.4852,51.1101,"Cattle",30,1868,null,"Matched to Shahābi (Khūr) in Tangistan entries.","Expanded extraction"],["Shahabi (Khur)","Tangistan",28.4852,51.1101,"Donkey",50,1868,null,"Matched to Shahābi (Khūr) in Tangistan entries.","Expanded extraction"],["Shahabi (Khur)","Tangistan",28.4852,51.1101,"Sheep and Goats",200,1868,null,"Matched to Shahābi (Khūr) in Tangistan entries.","Expanded extraction"],["Shakar (Bagh)","Tangistan",null,null,"Camel",20,1868,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Shakar (Bagh)","Tangistan",null,null,"Cattle",30,1868,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Shakar (Bagh)","Tangistan",null,null,"Donkey",50,1868,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Shakar (Bagh)","Tangistan",null,null,"Horse",4,1868,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Shakar (Bagh)","Tangistan",null,null,"Mule",3,1868,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Shakar (Bagh)","Tangistan",null,null,"Sheep and Goats",600,1868,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Shakhurah","Bahrain",26.21472,50.50694,"Cattle",6,228,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Shakhurah","Bahrain",26.21472,50.50694,"Donkey",31,228,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Sharaibeh","Bahrain",26.25,50.46667,"Cattle",6,228,null,"Matched to Sharaibah in Bahrain Island entries.","Expanded extraction"],["Sharaibeh","Bahrain",26.25,50.46667,"Donkey",28,228,null,"Matched to Sharaibah in Bahrain Island entries.","Expanded extraction"],["Shokah","Wadi Ham",25.1,56.03333,"Sheep and Goats",150,619,"Source says 'about 150 sheep and goats'; it also says 'a few camels and donkeys' without exact counts.","Matched to Shokah in Ham Wadi.","Expanded extraction"],["Shāhik","Badiyah",22.43089,58.77181,"Camel",70,195,null,"Matched to Shāhik in Badiyah.","Expanded extraction"],["Shāhik","Badiyah",22.43089,58.77181,"Cattle",100,195,null,"Matched to Shāhik in Badiyah.","Expanded extraction"],["Shāhik","Badiyah",22.43089,58.77181,"Donkey",60,195,null,"Matched to Shāhik in Badiyah.","Expanded extraction"],["Shāhik","Badiyah",22.43089,58.77181,"Sheep and Goats",1000,195,null,"Matched to Shāhik in Badiyah.","Expanded extraction"],["Shāraq","Badiyah",22.46317,58.79078,"Camel",20,196,null,"Matched to Shāraq in Badiyah.","Expanded extraction"],["Shāraq","Badiyah",22.46317,58.79078,"Cattle",80,196,null,"Matched to Shāraq in Badiyah.","Expanded extraction"],["Shāraq","Badiyah",22.46317,58.79078,"Donkey",25,196,null,"Matched to Shāraq in Badiyah.","Expanded extraction"],["Shāraq","Badiyah",22.46317,58.79078,"Sheep and Goats",1000,196,null,"Matched to Shāraq in Badiyah.","Expanded extraction"],["Siji","Wadi Ham",25.24764,56.07719,"Camel",10,620,"Source says resources are 'estimated at' 10 camels, 25 donkeys, 30 cattle and 300 sheep and goats.","Exact-name match.","Both datasets"],["Siji","Wadi Ham",25.24764,56.07719,"Cattle",30,620,"Source says resources are 'estimated at' 10 camels, 25 donkeys, 30 cattle and 300 sheep and goats.","Exact-name match.","Both datasets"],["Siji","Wadi Ham",25.24764,56.07719,"Donkey",25,620,"Source says resources are 'estimated at' 10 camels, 25 donkeys, 30 cattle and 300 sheep and goats.","Exact-name match.","Both datasets"],["Siji","Wadi Ham",25.24764,56.07719,"Sheep and Goats",300,620,"Source says resources are 'estimated at' 10 camels, 25 donkeys, 30 cattle and 300 sheep and goats.","Exact-name match.","Expanded extraction"],["Sufalah","Sitrah",26.16278,50.62556,"Cattle",3,1833,null,"Exact-name match in Sitrah entries.","Expanded extraction"],["Sufalah","Sitrah",26.16278,50.62556,"Donkey",11,1833,null,"Exact-name match in Sitrah entries.","Expanded extraction"],["Suraki","Tangistan",28.8345,51.2006,"Camel",30,1869,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Suraki","Tangistan",28.8345,51.2006,"Cattle",40,1869,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Suraki","Tangistan",28.8345,51.2006,"Donkey",50,1869,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Suraki","Tangistan",28.8345,51.2006,"Horse",3,1869,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Suraki","Tangistan",28.8345,51.2006,"Mule",3,1869,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Suraki","Tangistan",28.8345,51.2006,"Sheep and Goats",600,1869,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Taqi (Qal'eh-i-)","Tangistan",null,null,"Camel",20,1869,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Taqi (Qal'eh-i-)","Tangistan",null,null,"Cattle",20,1869,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Taqi (Qal'eh-i-)","Tangistan",null,null,"Donkey",50,1869,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Taqi (Qal'eh-i-)","Tangistan",null,null,"Horse",5,1869,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Taqi (Qal'eh-i-)","Tangistan",null,null,"Mule",3,1869,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Taqi (Qal'eh-i-)","Tangistan",null,null,"Sheep and Goats",500,1869,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Tashshan","Bahrain",26.21139,50.54611,"Cattle",3,229,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Tashshan","Bahrain",26.21139,50.54611,"Donkey",8,229,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Tayibah","Wadi Ham",25.41228,56.17075,"Camel",10,620,"Source says livestock are 'about' 10 camels, 60 donkeys, 70 cattle and 650 sheep and goats.","Matched to Taiyibah in Ham Wadi.","Both datasets"],["Tayibah","Wadi Ham",25.41228,56.17075,"Cattle",70,620,"Source says livestock are 'about' 10 camels, 60 donkeys, 70 cattle and 650 sheep and goats.","Matched to Taiyibah in Ham Wadi.","Both datasets"],["Tayibah","Wadi Ham",25.41228,56.17075,"Donkey",60,620,"Source says livestock are 'about' 10 camels, 60 donkeys, 70 cattle and 650 sheep and goats.","Matched to Taiyibah in Ham Wadi.","Both datasets"],["Tayibah","Wadi Ham",25.41228,56.17075,"Sheep and Goats",650,620,"Source says livestock are 'about' 10 camels, 60 donkeys, 70 cattle and 650 sheep and goats.","Matched to Taiyibah in Ham Wadi.","Expanded extraction"],["Tubli","Bahrain",26.19667,50.56167,"Cattle",4,229,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Tubli","Bahrain",26.19667,50.56167,"Donkey",22,229,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Tukhm Mari","Tangistan",28.9263,51.1321,"Camel",80,1869,null,"Matched to Takhm Māri in Tangistan entries.","Expanded extraction"],["Tukhm Mari","Tangistan",28.9263,51.1321,"Cattle",80,1869,null,"Matched to Takhm Māri in Tangistan entries.","Expanded extraction"],["Tukhm Mari","Tangistan",28.9263,51.1321,"Donkey",100,1869,null,"Matched to Takhm Māri in Tangistan entries.","Expanded extraction"],["Tukhm Mari","Tangistan",28.9263,51.1321,"Horse",4,1869,null,"Matched to Takhm Māri in Tangistan entries.","Expanded extraction"],["Tukhm Mari","Tangistan",28.9263,51.1321,"Sheep and Goats",600,1869,null,"Matched to Takhm Māri in Tangistan entries.","Expanded extraction"],["Tul Siyah","Tangistan",28.9774,51.1144,"Camel",20,1869,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Tul Siyah","Tangistan",28.9774,51.1144,"Cattle",50,1869,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Tul Siyah","Tangistan",28.9774,51.1144,"Donkey",100,1869,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Tul Siyah","Tangistan",28.9774,51.1144,"Horse",4,1869,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Tul Siyah","Tangistan",28.9774,51.1144,"Mule",2,1869,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Tul Siyah","Tangistan",28.9774,51.1144,"Sheep and Goats",2000,1869,null,"Exact-name match in Tangistan entries.","Expanded extraction"],["Tunb Seh","Tangistan",null,null,"Cattle",10,1869,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Tunb Seh","Tangistan",null,null,"Donkey",20,1869,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Tunb Seh","Tangistan",null,null,"Sheep and Goats",100,1869,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Vakanku","Tangistan",null,null,"Cattle",10,1870,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Vakanku","Tangistan",null,null,"Donkey",20,1870,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Vakanku","Tangistan",null,null,"Sheep and Goats",1000,1870,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Wasil","Badiyah",22.50083,58.74287,"Camel",80,196,null,"Exact-name match in Badiyah.","Expanded extraction"],["Wasil","Badiyah",22.50083,58.74287,"Cattle",200,196,null,"Exact-name match in Badiyah.","Expanded extraction"],["Wasil","Badiyah",22.50083,58.74287,"Donkey",150,196,null,"Exact-name match in Badiyah.","Expanded extraction"],["Wasil","Badiyah",22.50083,58.74287,"Horse",300,196,null,"Exact-name match in Badiyah.","Expanded extraction"],["Wasil","Badiyah",22.50083,58.74287,"Sheep and Goats",3000,196,null,"Exact-name match in Badiyah.","Expanded extraction"],["Yahis","Badiyah",null,null,"Camel",8,196,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Yahis","Badiyah",null,null,"Cattle",20,196,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Yahis","Badiyah",null,null,"Donkey",80,196,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Yahis","Badiyah",null,null,"Horse",40,196,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Yahis","Badiyah",null,null,"Sheep and Goats",2000,196,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Zair Khizar","Tangistan",null,null,"Camel",50,1870,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Zair Khizar","Tangistan",null,null,"Cattle",60,1870,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Zair Khizar","Tangistan",null,null,"Donkey",100,1870,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Zair Khizar","Tangistan",null,null,"Horse",10,1870,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Zair Khizar","Tangistan",null,null,"Mule",4,1870,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Zair Khizar","Tangistan",null,null,"Sheep and Goats",1700,1870,null,"No reliable coordinate match; left blank.","Expanded extraction"],["Zallaq","Bahrain",26.04917,50.48278,"Cattle",15,229,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Zallaq","Bahrain",26.04917,50.48278,"Donkey",15,229,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Zinj","Bahrain",26.21528,50.56417,"Cattle",3,229,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"],["Zinj","Bahrain",26.21528,50.56417,"Donkey",15,229,null,"Exact-name match in Bahrain Island entries.","Expanded extraction"]],"fields":[{"name":"Location","type":"string","format":"","analyzerType":"STRING"},{"name":"Region","type":"string","format":"","analyzerType":"STRING"},{"name":"Latitude","type":"real","format":"","analyzerType":"FLOAT"},{"name":"Longitude","type":"real","format":"","analyzerType":"FLOAT"},{"name":"Animal_Type","type":"string","format":"","analyzerType":"STRING"},{"name":"Count","type":"integer","format":"","analyzerType":"INT"},{"name":"Printed_Page","type":"real","format":"","analyzerType":"FLOAT"},{"name":"Notes","type":"string","format":"","analyzerType":"STRING"},{"name":"Coordinate_Verification","type":"string","format":"","analyzerType":"STRING"},{"name":"Data_Source","type":"string","format":"","analyzerType":"STRING"}],"type":"","metadata":{"id":"-bon5te","format":"row","label":"lorimer_animals_combined_kepler (1).csv","size":69445},"disableDataOperation":false}}];
+            const config = {"version":"v1","config":{"visState":{"filters":[],"layers":[{"id":"i2wrfpf","type":"point","config":{"dataId":"-bon5te","columnMode":"points","label":"lorimer_animals_combined_kepler (1)","color":[218,112,191],"highlightColor":[252,242,26,255],"columns":{"lat":"Latitude","lng":"Longitude"},"isVisible":true,"visConfig":{"pulseTrigger":"continuous","pulseTimeField":"","pulseDurationMs":1000,"glowEnabled":false,"glowExtent":1.9,"glowStrength":0.05,"pulseEnabled":false,"pulseMode":"pulse","pulseSpeed":1,"pulseExpansion":2,"radius":10,"fixedRadius":false,"opacity":0.8,"outline":false,"thickness":2,"strokeColor":null,"colorRange":{"name":"color.customPalette.customOrdinal.Animal_Type","type":"customOrdinal","category":"Custom","colors":["#6E40AA","#FE4B83","#FEDF75","#3FCA4D","#23ABD8","#F09C32","#E45454","#D985DD"],"colorMap":[["Camel","#6E40AA"],["Cattle","#FE4B83"],["Donkey","#FEDF75"],["Goat","#3FCA4D"],["Horse","#23ABD8"],["Mule","#F09C32"],["Sheep","#E45454"],["Sheep and Goats","#D985DD"]]},"strokeColorRange":{"name":"Global Warming","type":"sequential","category":"Uber","colors":["#4C0035","#880030","#B72F15","#D6610A","#EF9100","#FFC300"]},"radiusRange":[0,150.3],"filled":true,"billboard":false,"allowHover":true,"showNeighborOnHover":false,"showHighlightColor":true},"hidden":false,"textLabel":[{"field":null,"color":[255,255,255],"size":18,"weight":400,"offset":[0,0],"anchor":"start","alignment":"center","outlineWidth":0,"outlineColor":[255,0,0,255],"background":false,"backgroundColor":[0,0,200,255],"collisionEnabled":false}]},"visualChannels":{"colorField":{"name":"Animal_Type","type":"string"},"colorScale":"customOrdinal","strokeColorField":null,"strokeColorScale":"quantile","sizeField":{"name":"Count","type":"integer"},"sizeScale":"sqrt"}}],"effects":[],"annotations":[],"interactionConfig":{"tooltip":{"fieldsToShow":{"-bon5te":[{"name":"Animal_Type","id":"Animal_Type","displayName":"Animal_Type","format":"","fieldIdx":4,"type":"string","analyzerType":"STRING"},{"name":"Count","id":"Count","displayName":"Count","format":"","fieldIdx":5,"type":"integer","analyzerType":"INT"},{"name":"Location","id":"Location","displayName":"Location","format":"","fieldIdx":0,"type":"string","analyzerType":"STRING"},{"name":"Latitude","id":"Latitude","displayName":"Latitude","format":"","fieldIdx":2,"type":"real","analyzerType":"FLOAT"},{"name":"Longitude","id":"Longitude","displayName":"Longitude","format":"","fieldIdx":3,"type":"real","analyzerType":"FLOAT"}]},"timezone":null,"compareMode":false,"compareType":"absolute","enabled":true},"legend":{"hideInvisibleLayers":false,"enabled":false},"brush":{"size":2.5,"enabled":false},"geocoder":{"limitSearch":false,"color":[255,0,0],"enabled":false},"coordinate":{"enabled":false},"annotation":{"enabled":false},"zoomOpacity":{"controllers":[],"enabled":false}},"layerBlending":"subtractive","overlayBlending":"screen","splitMaps":[],"animationConfig":{"currentTime":null,"speed":1,"timeFormat":null,"timezone":null},"editor":{"features":[],"visible":true},"layerOrder":["i2wrfpf"],"groupBys":[],"joins":[]},"mapState":{"bearing":0,"dragRotate":false,"latitude":27.003162441336983,"longitude":51.44373454983018,"pitch":0,"zoom":6.218596246749679,"isSplit":false,"isViewportSynced":true,"isZoomLocked":false,"splitMapViewports":[],"maxPitch":60,"mapSplitMode":"SINGLE_MAP","swipeComparePercentage":50,"mapViewMode":"MODE_2D","globe":{"enabled":false,"config":{"atmosphere":true,"hugeHalo":true,"hugeHaloRadius":3.5,"hugeHaloOpacity":0.2,"azimuth":false,"azimuthAngle":45,"terminator":true,"terminatorOpacity":0.35,"basemap":true,"labels":false,"labelsColor":[114.75,114.75,114.75],"adminLines":true,"adminLinesColor":[40,63,93],"water":true,"waterColor":[17,35,48],"surface":true,"surfaceColor":[9,16,29],"backgroundColor":[4,9,17],"stars":true}}},"mapStyle":{"styleType":"dark-matter","topLayerGroups":{},"visibleLayerGroups":{"label":true,"road":true,"border":false,"building":true,"water":true,"land":true,"3d building":false},"threeDBuildingColor":[15.035172933000911,15.035172933000911,15.035172933000911],"backgroundColor":[0,0,0],"mapStyles":{}},"uiState":{"mapControls":{"mapLegend":{"active":false},"chart":{"active":false},"cameraBookmarks":{"show":false,"settings":{"position":{"x":60,"y":20,"anchorX":"right","anchorY":"top"},"contentHeight":-1}},"mapInfo":{"active":true,"show":true}},"locale":"en","theme":"dark"}}};
+            const info = null;
+
+            const loadedData = keplerGl.KeplerGlSchema.load(
+              datasets,
+              config
+            );
+
+            // The 500 ms delay is a historical workaround for a race where
+            // keplerGl re-initialises and overwrites config applied synchronously.
+            // The pre-seeded styleType above removes the basemap flash on first
+            // render; this dispatch still applies the full saved config (layers,
+            // viewport, layer groups, etc.) once the component has settled.
+            window.setTimeout(() => {
+              store.dispatch(
+                keplerGl.addDataToMap({
+                  datasets: loadedData.datasets,
+                  config: loadedData.config,
+                  info,
+                  options: {
+                    centerMap: false,
+                  },
+                })
+              );
+            }, 500);
+          }(KeplerGl, store))
+        </script>
+      </body>
+    </html>
+  
